@@ -1,26 +1,14 @@
-# AI Jailbreak Competition
+# AI Jailbreak Backend
 
-A competition site for AI jailbreak challenges with team login, multi-round challenges, and admin monitoring.
+Express + TypeScript backend for the AI Jailbreak Competition.
 
-## Project Structure
+## Features
 
-- **app/** - Next.js 13+ app router pages
-  - `login/` - Team login page
-  - `round1/` - Round 1: 6 sequential chat-based challenge stages (5 stateless + 1 memory-based)
-  - `round2/` - Round 2: 5 chained bot stages where each bot's output feeds the next
-  - `admin/` - Admin dashboard for monitoring team progress and transcripts
-
-- **components/** - Reusable React components
-  - `ChatWindow.tsx` - Chat interface that calls the backend `/api/chat` endpoint
-  - `StageProgress.tsx` - Progress indicator showing current stage
-  - `ProtectedRoute.tsx` - Route protection for authenticated teams
-
-- **lib/** - Utility modules
-  - `apiClient.ts` - API client for backend communication
-
-- **public/** - Static assets
-
-- **.env.example** - Environment variables template
+- Team login with JWT session tokens
+- Chat endpoint `/api/chat` that handles stage-based AI interactions
+- Redis-backed conversation history
+- Admin endpoints for monitoring team progress and transcripts
+- Stage prompt management
 
 ## Getting Started
 
@@ -33,6 +21,7 @@ npm run dev
 
 # Build for production
 npm run build
+npm start
 ```
 
 ## Environment Variables
@@ -40,5 +29,14 @@ npm run build
 Copy `.env.example` to `.env` and configure:
 
 ```
-NEXT_PUBLIC_API_BASE_URL=http://localhost:3000/api
+PORT=3000
+JWT_SECRET=your-jwt-secret
+ANTHROPIC_API_KEY=your-anthropic-key
+REDIS_URL=redis://localhost:6379
 ```
+
+## API Endpoints
+
+- `POST /api/auth/login` - Team login, returns JWT token
+- `POST /api/chat` - Send a message, get AI response (requires auth)
+- `GET /api/admin` - Admin dashboard data (requires auth)
