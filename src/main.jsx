@@ -728,7 +728,6 @@ function AdminPage() {
               ["dashboard",   "Dashboard"],
               ["teams",       "Teams"],
               ["round1",      "Round 1"],
-              ["round2",      "Round 2"],
               ["chat",        "Team Chat"],
               ["leaderboard", "Leaderboard"],
               ["logs",        "Activity Logs"],
@@ -789,18 +788,9 @@ function AdminPage() {
               <ControlValue label="CURRENT ROUND"  value={round2Unlocked ? "ROUND 2" : "ROUND 1"} />
               <ControlValue label="EVENT TIMER"    value={formatTimer(remaining)} />
               <ControlValue label="ROUND 1 STATUS" value="COMPLETED" />
-              <ControlValue label="ROUND 2 STATUS" value={round2Unlocked ? "UNLOCKED" : "LOCKED"} danger={!round2Unlocked} />
-              <ControlValue label="AI BOT STATUS"  value={round2Unlocked ? "READY" : "LOCKED"} danger={!round2Unlocked} />
             </div>
             <div className="control-actions">
               <button className="admin-btn secondary" onClick={() => setSection("round1")}>Manage Qualification</button>
-              <button
-                className="admin-btn primary"
-                disabled={!qualified.length || round2Unlocked}
-                onClick={() => setConfirmUnlockOpen(true)}
-              >
-                Unlock Round 2
-              </button>
             </div>
           </section>
         </div>
@@ -886,25 +876,7 @@ function AdminDashboard({ formatTimer, remaining, activeTeams, completedCount, q
       <AdminStat label="TOTAL TEAMS"       value="8" />
       <AdminStat label="ACTIVE TEAMS"      value={activeTeams} />
       <AdminStat label="ROUND 1 COMPLETED" value={completedCount} />
-      <AdminStat label="ROUND 2 QUALIFIED" value={qualifiedCount} />
-      <AdminStat label="ROUND 2 ACTIVE"    value={round2Active} />
     </div>
-
-    <section className="admin-panel">
-      <SectionTitle
-        kicker="ROUND 2 STATUS"
-        title="Round 2 access control"
-        action={<button className="text-link" onClick={() => setSection("round1")}>Manage qualification →</button>}
-      />
-      <p className="panel-note">
-        Round 2 is <strong>LOCKED</strong> until qualification is confirmed and the admin explicitly unlocks it.
-        {qualifiedCount > 0 && ` ${qualifiedCount} team${qualifiedCount > 1 ? "s" : ""} currently qualified.`}
-      </p>
-      <div className={round2Unlocked ? "status-strip unlocked" : "status-strip"}>
-        <span>ROUND 2</span>
-        <strong>{round2Unlocked ? "UNLOCKED" : "LOCKED"}</strong>
-      </div>
-    </section>
   </>;
 }
 
