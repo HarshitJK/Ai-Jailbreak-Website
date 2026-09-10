@@ -383,138 +383,105 @@ input:focus, textarea:focus { border-color: rgba(220,38,38,.6); background: #131
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   ADMIN LOGIN PAGE — /admin before authentication
+   PARTICIPANT LOGIN SECURITY
+   Password strength indicator, eye toggle, brute-force lockout banner
 ═══════════════════════════════════════════════════════════════════════════ */
-.admin-login-page {
-  min-height: 100vh;
-  background: #080808;
+
+/* Password input with eye toggle — used inside a form label */
+.pw-field-wrap { position: relative; }
+.pw-field-wrap input { padding-right: 44px; }
+
+.pw-eye-btn {
+  position: absolute;
+  right: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: 0;
+  color: #52525b;
   display: grid;
   place-items: center;
-  padding: 32px 20px;
-  font-family: Inter, system-ui, sans-serif;
+  padding: 4px;
+  line-height: 1;
+  transition: color .15s;
 }
-
-.admin-login-box {
-  width: min(440px, 100%);
-  background: #0e0e0e;
-  border: 1px solid rgba(255,255,255,.1);
-  padding: 36px 32px 28px;
-  box-shadow: 0 30px 80px rgba(0,0,0,.55);
-}
-
-.admin-login-logo {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 22px;
-  padding-bottom: 22px;
-  border-bottom: 1px solid rgba(255,255,255,.07);
-}
-
-.admin-login-title { font: 700 13px "Space Grotesk"; letter-spacing: .12em; color: #f5f5f5; }
-.admin-login-sub   { font-size: 9px; letter-spacing: .18em; color: #5a5a62; margin-top: 4px; }
-
-.admin-login-heading { margin-bottom: 24px; }
-.admin-login-heading h2 { font: 600 24px "Space Grotesk"; margin: 8px 0 8px; letter-spacing: -.02em; color: #f0f0f0; }
-.admin-login-heading p  { color: #76767e; font-size: 12px; line-height: 1.6; margin: 0; }
-
-.admin-field { margin-bottom: 18px; }
-.admin-field label { display: block; font-size: 11px; font-weight: 600; color: #9a9aa2; letter-spacing: .05em; margin-bottom: 7px; }
-
-/* Password field with eye toggle */
-.pw-field-wrap { position: relative; }
-.pw-field-wrap input { padding-right: 42px; }
-.pw-eye-btn {
-  position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
-  background: transparent; border: 0; color: #66666e;
-  display: grid; place-items: center; padding: 4px; line-height: 1; transition: color .15s;
-}
-.pw-eye-btn:hover { color: #aaaaaa; }
+.pw-eye-btn:hover { color: #a1a1aa; }
 
 /* Password strength bar */
-.pw-strength-wrap { margin-top: 9px; }
-.pw-strength-bar  { height: 3px; background: #1e1e1e; border-radius: 2px; overflow: hidden; margin-bottom: 5px; }
-.pw-strength-fill { height: 100%; border-radius: 2px; transition: width .3s ease, background .3s ease; }
+.pw-strength-wrap { margin-top: 8px; }
+.pw-strength-bar {
+  height: 3px;
+  background: #1e1e1e;
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 5px;
+}
+.pw-strength-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width .3s ease, background .3s ease;
+}
 .pw-strength-fill.strength-weak   { background: #dc2626; }
 .pw-strength-fill.strength-medium { background: #d97706; }
 .pw-strength-fill.strength-strong { background: #16a34a; }
+
 .pw-strength-label { font-size: 10px; font-weight: 700; letter-spacing: .06em; }
 .pw-strength-label.strength-weak   { color: #ef4444; }
 .pw-strength-label.strength-medium { color: #f59e0b; }
 .pw-strength-label.strength-strong { color: #4ade80; }
 
-/* Unmet password requirements */
+/* Unmet requirements list */
 .pw-requirements { list-style: none; margin: 7px 0 0; padding: 0; }
-.pw-req-item     { font-size: 10px; color: #f87171; margin: 3px 0; letter-spacing: .02em; }
+.pw-req-item { font-size: 10px; color: #f87171; margin: 3px 0; }
 
-/* Lockout banner */
-.lockout-banner {
-  background: rgba(127,29,29,.18); border: 1px solid rgba(239,68,68,.3);
-  color: #fca5a5; border-radius: 5px; padding: 11px 14px;
-  font-size: 12px; line-height: 1.5; margin-bottom: 18px;
+/* Brute-force lockout banner — login form */
+.auth-lockout-banner {
+  background: rgba(127,29,29,.15);
+  border: 1px solid rgba(239,68,68,.28);
+  color: #fca5a5;
+  border-radius: 7px;
+  padding: 11px 13px;
+  font-size: 12px;
+  line-height: 1.5;
+  margin-bottom: 16px;
 }
-.lockout-banner strong { color: #fff; font-variant-numeric: tabular-nums; }
-
-/* Login error */
-.admin-login-error {
-  background: rgba(127,29,29,.12); border: 1px solid rgba(239,68,68,.25);
-  color: #fca5a5; padding: 10px 12px; border-radius: 5px;
-  font-size: 11px; margin-bottom: 14px; line-height: 1.5;
+.auth-lockout-banner strong {
+  color: #fff;
+  font-variant-numeric: tabular-nums;
 }
 
-/* Login submit button */
-.admin-login-btn {
-  width: 100%; height: 46px; background: #dc2626; color: #fff; border: 0;
-  border-radius: 6px; font: 700 13px Inter, sans-serif; letter-spacing: .03em;
-  transition: background .15s, transform .12s; margin-top: 4px;
-}
-.admin-login-btn:hover:not(:disabled) { background: #ef4444; transform: translateY(-1px); }
-.admin-login-btn:disabled { opacity: .38; cursor: not-allowed; }
-.admin-login-btn span { margin-left: 7px; }
-
-/* Disclaimer */
-.admin-login-note {
-  margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,.06);
-  color: #4e4e56; font-size: 10px; line-height: 1.6; text-align: center;
+/* Attempt counter hint */
+.auth-attempt-hint {
+  font-size: 10px;
+  color: #f59e0b;
+  margin: -10px 0 14px;
+  padding: 7px 10px;
+  background: rgba(217,119,6,.08);
+  border: 1px solid rgba(217,119,6,.2);
+  border-radius: 5px;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   SECURITY BADGE
-═══════════════════════════════════════════════════════════════════════════ */
-.security-badge {
-  display: inline-flex; align-items: center; gap: 6px;
-  font-size: 10px; font-weight: 600; color: #4ade80; letter-spacing: .08em;
-  border: 1px solid rgba(74,222,128,.2); background: rgba(20,83,45,.1);
-  padding: 5px 10px; border-radius: 3px; margin-bottom: 22px;
-}
-.security-dot { font-size: 8px; animation: security-pulse 2s ease-in-out infinite; }
-@keyframes security-pulse { 0%,100%{opacity:1} 50%{opacity:.45} }
-.sidebar-security { font-size: 9px; padding: 4px 8px; margin-bottom: 10px; width: 100%; justify-content: center; }
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   ADMIN LOGOUT BUTTON
-═══════════════════════════════════════════════════════════════════════════ */
-.admin-sidebar-foot { border-top: 1px solid rgba(255,255,255,.07); padding: 14px 9px 0; }
-.admin-logout-btn {
-  width: 100%; background: transparent; border: 1px solid rgba(239,68,68,.2);
-  color: #f87171; border-radius: 4px; padding: 9px 12px;
-  font: 600 10px Inter, sans-serif; letter-spacing: .08em; text-align: center;
-  transition: background .15s, border-color .15s, color .15s;
-}
-.admin-logout-btn:hover { background: rgba(127,29,29,.15); border-color: rgba(239,68,68,.45); color: #fff; }
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   CHALLENGE TABS — team chat
+   CHALLENGE TABS — team chat (admin)
 ═══════════════════════════════════════════════════════════════════════════ */
 .challenge-tabs-row {
-  display: flex; gap: 5px; flex-wrap: wrap;
-  margin-bottom: 16px; padding-bottom: 14px;
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+  padding-bottom: 14px;
   border-bottom: 1px solid rgba(255,255,255,.07);
 }
 .challenge-tab {
-  background: #111; border: 1px solid rgba(255,255,255,.08); color: #7a7a82;
-  border-radius: 4px; padding: 7px 12px; font: 600 10px "Space Grotesk";
-  letter-spacing: .06em; transition: background .15s, color .15s, border-color .15s; white-space: nowrap;
+  background: #111;
+  border: 1px solid rgba(255,255,255,.08);
+  color: #7a7a82;
+  border-radius: 4px;
+  padding: 7px 12px;
+  font: 600 10px "Space Grotesk";
+  letter-spacing: .06em;
+  transition: background .15s, color .15s, border-color .15s;
+  white-space: nowrap;
 }
 .challenge-tab:hover  { background: #171717; color: #d0d0d8; }
 .challenge-tab.active { background: #1a1a1a; border-color: rgba(239,68,68,.45); color: #ef4444; }
@@ -527,17 +494,24 @@ input:focus, textarea:focus { border-color: rgba(220,38,38,.6); background: #131
   min-width: 760px;
   display: grid;
   grid-template-columns: 1.4fr 110px 110px 1.6fr 1.2fr;
-  gap: 12px; padding: 11px 14px;
+  gap: 12px;
+  padding: 11px 14px;
   border-bottom: 1px solid rgba(255,255,255,.05);
   font: 9px ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 .log-action { color: #c7c7cc !important; }
 
-/* Locked round 2 state */
+/* Admin sidebar footer */
+.admin-sidebar-foot { border-top: 1px solid rgba(255,255,255,.07); padding: 17px 9px 0; }
+.admin-sidebar-foot strong { display: block; color: #f5f5f5; font: 700 10px "Space Grotesk"; letter-spacing: .14em; }
+.admin-sidebar-foot span   { display: block; color: #66666e; font-size: 9px; letter-spacing: .13em; margin-top: 5px; }
+
+/* Round 2 locked state */
 .round2-panel .round-state.locked { background: rgba(127,29,29,.08); }
 
 @media (max-width: 760px) {
   .challenge-tabs-row { gap: 4px; }
   .challenge-tab { padding: 6px 9px; font-size: 9px; }
-  .admin-login-box { padding: 28px 20px 22px; }
 }
+
+

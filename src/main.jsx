@@ -25,22 +25,45 @@ const overview = [
 ];
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   PARTICIPANT APP — do NOT modify this section
+   PASSWORD SECURITY — participant login / registration
+   Policy: 8+ chars, uppercase, lowercase, number
+═══════════════════════════════════════════════════════════════════════════ */
+function validatePassword(pw) {
+  const rules = [
+    { label: "At least 8 characters",      ok: pw.length >= 8 },
+    { label: "One uppercase letter (A–Z)",  ok: /[A-Z]/.test(pw) },
+    { label: "One lowercase letter (a–z)",  ok: /[a-z]/.test(pw) },
+    { label: "One number (0–9)",            ok: /[0-9]/.test(pw) }
+  ];
+  const passed = rules.filter((r) => r.ok).length;
+  const valid  = passed === 4;
+  let strength = "weak";
+  if (passed >= 2 && pw.length >= 5) strength = "medium";
+  if (valid)                          strength = "strong";
+  return { valid, strength, rules, passed };
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PARTICIPANT APP
 ═══════════════════════════════════════════════════════════════════════════ */
 function App() {
-  const [page, setPage] = useState("auth");
-  const [authMode, setAuthMode] = useState("register");
-  const [team, setTeam] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [page, setPage]                   = useState("auth");
+  const [authMode, setAuthMode]           = useState("register");
+  const [team, setTeam]                   = useState("");
+  const [email, setEmail]                 = useState("");
+  const [password, setPassword]           = useState("");
   const [storedAccount, setStoredAccount] = useState(null);
-  const [completed, setCompleted] = useState([]);
-  const [active, setActive] = useState(0);
-  const [messages, setMessages] = useState([]);
-  const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [mobileNav, setMobileNav] = useState(false);
-  const [error, setError] = useState("");
+  const [completed, setCompleted]         = useState([]);
+  const [active, setActive]               = useState(0);
+  const [messages, setMessages]           = useState([]);
+  const [input, setInput]                 = useState("");
+  const [loading, setLoading]             = useState(false);
+  const [mobileNav, setMobileNav]         = useState(false);
+  const [error, setError]                 = useState("");
+
+  // Login brute-force protection
+  const [loginAttempts, setLoginAttempts]         = useState(0);
+  const [loginLockoutUntil, setLoginLockoutUntil] = useState(null);
 
   const progress = completed.length;
 
@@ -62,7 +85,7 @@ function App() {
   }, [active, page]);
 
   const currentDone = completed.includes(active);
-  const allDone = completed.length === 6;
+  const allDone     = completed.length === 6;
 
   function register() {
     setError("");
@@ -72,6 +95,12 @@ function App() {
     }
     if (!email.includes("@")) {
       setError("Enter a valid email address.");
+      return;
+    }
+    // Password strength check on registration
+    const pwCheck = validatePassword(password);
+    if (!pwCheck.valid) {
+      setError("Password is too weak. Please follow the requirements shown below.");
       return;
     }
     const account = { team: team.trim(), email: email.trim(), password };
@@ -84,15 +113,31 @@ function App() {
 
   function login() {
     setError("");
+    // Lockout check
+    if (loginLockoutUntil && Date.now() < loginLockoutUntil) {
+      setError("Too many failed attempts. Please wait for the countdown to finish.");
+      return;
+    }
     const account = storedAccount;
     if (!account) {
       setError("No account found. Create an account first.");
       return;
     }
     if (team.trim() !== account.team || password !== account.password) {
-      setError("Team name or password is incorrect.");
+      const next = loginAttempts + 1;
+      setLoginAttempts(next);
+      if (next >= 5) {
+        setLoginLockoutUntil(Date.now() + 60000);
+        setError("Too many failed attempts. Login disabled for 60 seconds.");
+      } else {
+        const left = 5 - next;
+        setError(`Team name or password is incorrect. ${left} attempt${left !== 1 ? "s" : ""} remaining.`);
+      }
       return;
     }
+    // Success — reset counters
+    setLoginAttempts(0);
+    setLoginLockoutUntil(null);
     setPage("challenge");
     setCompleted([]);
     setActive(0);
@@ -152,7 +197,7 @@ function App() {
       {page === "auth" ? (
         <AuthPage
           mode={authMode}
-          setMode={(m) => { setAuthMode(m); setError(""); }}
+          setMode={(m) => { setAuthMode(m); setError(""); setPassword(""); }}
           team={team}
           email={email}
           password={password}
@@ -163,6 +208,8 @@ function App() {
           login={login}
           error={error}
           hasAccount={!!storedAccount}
+          loginAttempts={loginAttempts}
+          loginLockoutUntil={loginLockoutUntil}
         />
       ) : (
         <ChallengePage
@@ -199,14 +246,35 @@ function Brand({ compact = false }) {
   );
 }
 
-function AuthPage(props) {
-  const {
-    mode, setMode, team, email, password, setTeam, setEmail, setPassword,
-    register, login, error, hasAccount
-  } = props;
+/* ═══════════════════════════════════════════════════════════════════════════
+   AUTH PAGE — with password strength, eye toggle, brute-force protection
+═══════════════════════════════════════════════════════════════════════════ */
+function AuthPage({
+  mode, setMode, team, email, password, setTeam, setEmail, setPassword,
+  register, login, error, hasAccount, loginAttempts, loginLockoutUntil
+}) {
+  const [showRegPw, setShowRegPw]   = useState(false);
+  const [showLoginPw, setShowLoginPw] = useState(false);
+  const [lockSecsLeft, setLockSecsLeft] = useState(0);
+
+  const pwAnalysis = password ? validatePassword(password) : null;
+
+  // Live countdown for login lockout
+  useEffect(() => {
+    if (!loginLockoutUntil) { setLockSecsLeft(0); return; }
+    function tick() {
+      setLockSecsLeft(Math.max(0, Math.ceil((loginLockoutUntil - Date.now()) / 1000)));
+    }
+    tick();
+    const id = setInterval(tick, 500);
+    return () => clearInterval(id);
+  }, [loginLockoutUntil]);
+
+  const isLockedOut = !!(loginLockoutUntil && Date.now() < loginLockoutUntil && lockSecsLeft > 0);
 
   return (
     <main className="auth-page">
+      {/* ── Left intro panel ── */}
       <section className="intro-panel">
         <div className="intro-inner">
           <div className="intro-copy">
@@ -216,18 +284,21 @@ function AuthPage(props) {
 
             <div className="overview">
               <h2>Event Overview</h2>
-              <ul className="overview-points">{overview.map((point, i) => <li key={i}>{point}</li>)}</ul>
+              <ul className="overview-points">
+                {overview.map((point, i) => <li key={i}>{point}</li>)}
+              </ul>
               <p className="motto">Think. Prompt. Break. Advance.</p>
             </div>
           </div>
         </div>
       </section>
 
+      {/* ── Right auth panel ── */}
       <section className="auth-panel">
         <div className="auth-box">
           <div className="auth-tabs">
             <button className={mode === "register" ? "tab active" : "tab"} onClick={() => setMode("register")}>Register</button>
-            <button className={mode === "login" ? "tab active" : "tab"} onClick={() => setMode("login")}>Login</button>
+            <button className={mode === "login"    ? "tab active" : "tab"} onClick={() => setMode("login")}>Login</button>
           </div>
 
           <div className="auth-heading">
@@ -236,22 +307,160 @@ function AuthPage(props) {
             <p>{mode === "register" ? "Create your team account to begin." : "Sign in with your registered team account."}</p>
           </div>
 
+          {/* ── REGISTER FORM ── */}
           {mode === "register" ? (
             <form onSubmit={(e) => { e.preventDefault(); register(); }}>
-              <label>Team Name<input value={team} onChange={(e) => setTeam(e.target.value)} placeholder="Enter team name" /></label>
-              <label>Email ID<input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="team@example.com" /></label>
-              <label>Password<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Create a password" /></label>
-              <button className="primary-btn" type="submit">Create Account <span>→</span></button>
+              <label>
+                Team Name
+                <input
+                  value={team}
+                  onChange={(e) => setTeam(e.target.value)}
+                  placeholder="Enter team name"
+                />
+              </label>
+
+              <label>
+                Email ID
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="team@example.com"
+                />
+              </label>
+
+              <label>
+                Password
+                <div className="pw-field-wrap">
+                  <input
+                    type={showRegPw ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Create a strong password"
+                  />
+                  <button
+                    type="button"
+                    className="pw-eye-btn"
+                    onClick={() => setShowRegPw((v) => !v)}
+                    aria-label={showRegPw ? "Hide password" : "Show password"}
+                    tabIndex={-1}
+                  >
+                    {showRegPw ? (
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+                        <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+                        <line x1="1" y1="1" x2="23" y2="23"/>
+                      </svg>
+                    ) : (
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                        <circle cx="12" cy="12" r="3"/>
+                      </svg>
+                    )}
+                  </button>
+                </div>
+
+                {/* Password strength indicator */}
+                {password && pwAnalysis && (
+                  <div className="pw-strength-wrap">
+                    <div className="pw-strength-bar">
+                      <div
+                        className={`pw-strength-fill strength-${pwAnalysis.strength}`}
+                        style={{ width: `${(pwAnalysis.passed / 4) * 100}%` }}
+                      />
+                    </div>
+                    <span className={`pw-strength-label strength-${pwAnalysis.strength}`}>
+                      {pwAnalysis.strength === "weak"   ? "Weak"   :
+                       pwAnalysis.strength === "medium" ? "Medium" : "Strong"}
+                    </span>
+                    {!pwAnalysis.valid && (
+                      <ul className="pw-requirements">
+                        {pwAnalysis.rules.filter((r) => !r.ok).map((r, i) => (
+                          <li key={i} className="pw-req-item">✗ {r.label}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+              </label>
+
+              <button className="primary-btn" type="submit">
+                Create Account <span>→</span>
+              </button>
             </form>
+
           ) : (
+          /* ── LOGIN FORM ── */
             <form onSubmit={(e) => { e.preventDefault(); login(); }}>
-              <label>Team Name<input value={team} onChange={(e) => setTeam(e.target.value)} placeholder="Enter team name" /></label>
-              <label>Password<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Enter your password" /></label>
-              <button className="primary-btn" type="submit">Start Challenge <span>→</span></button>
+
+              {/* Lockout banner */}
+              {isLockedOut && (
+                <div className="auth-lockout-banner" role="alert">
+                  🔒 Too many failed attempts. Please wait <strong>{lockSecsLeft}s</strong>.
+                </div>
+              )}
+
+              <label>
+                Team Name
+                <input
+                  value={team}
+                  onChange={(e) => setTeam(e.target.value)}
+                  placeholder="Enter team name"
+                  disabled={isLockedOut}
+                />
+              </label>
+
+              <label>
+                Password
+                <div className="pw-field-wrap">
+                  <input
+                    type={showLoginPw ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Enter your password"
+                    disabled={isLockedOut}
+                  />
+                  <button
+                    type="button"
+                    className="pw-eye-btn"
+                    onClick={() => setShowLoginPw((v) => !v)}
+                    aria-label={showLoginPw ? "Hide password" : "Show password"}
+                    tabIndex={-1}
+                  >
+                    {showLoginPw ? (
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+                        <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+                        <line x1="1" y1="1" x2="23" y2="23"/>
+                      </svg>
+                    ) : (
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                        <circle cx="12" cy="12" r="3"/>
+                      </svg>
+                    )}
+                  </button>
+                </div>
+              </label>
+
+              {/* Attempt counter hint */}
+              {loginAttempts > 0 && !isLockedOut && (
+                <div className="auth-attempt-hint">
+                  {5 - loginAttempts} attempt{5 - loginAttempts !== 1 ? "s" : ""} remaining before temporary lockout.
+                </div>
+              )}
+
+              <button className="primary-btn" type="submit" disabled={isLockedOut}>
+                Start Challenge <span>→</span>
+              </button>
             </form>
           )}
 
-          {error && <div className={error.includes("created") ? "form-message success" : "form-message"}>{error}</div>}
+          {error && (
+            <div className={error.includes("created") ? "form-message success" : "form-message"}>
+              {error}
+            </div>
+          )}
 
           <div className="auth-footer">
             {mode === "register" ? (
@@ -284,7 +493,7 @@ function ChallengePage({
 
         <nav className="challenge-nav">
           {challenges.map((_, i) => {
-            const done = completed.includes(i);
+            const done      = completed.includes(i);
             const available = i <= progress;
             return (
               <button
@@ -327,7 +536,9 @@ function ChallengePage({
               <div className="messages">
                 {messages.map((msg) => (
                   <div key={msg.id} className={msg.side === "user" ? "message-row user" : "message-row"}>
-                    <div className={msg.side === "user" ? "message-avatar red" : "message-avatar"}>{msg.side === "user" ? "Y" : "PH"}</div>
+                    <div className={msg.side === "user" ? "message-avatar red" : "message-avatar"}>
+                      {msg.side === "user" ? "Y" : "PH"}
+                    </div>
                     <div className="message-bubble">
                       <div className="message-author">{msg.side === "user" ? "You" : "Challenge Control"}</div>
                       <div className="message-text">{msg.text}</div>
@@ -359,7 +570,11 @@ function ChallengePage({
                   placeholder="Enter your prompt..."
                   rows="3"
                 />
-                <button className="send-btn" onClick={submitPrompt} disabled={!input.trim() || loading || currentDone}>
+                <button
+                  className="send-btn"
+                  onClick={submitPrompt}
+                  disabled={!input.trim() || loading || currentDone}
+                >
                   Send <span>↑</span>
                 </button>
               </div>
@@ -388,47 +603,11 @@ function Completion({ progress, onHome }) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   ADMIN — SECURITY & AUTHENTICATION LAYER
-   ─────────────────────────────────────────────────────────────────────────
-   IMPORTANT: This is a FRONTEND-ONLY demo implementation.
-   Frontend authentication is NOT production-secure — credentials can be
-   inspected via browser developer tools.
-
-   TODO (backend migration):
-     - Move credential validation to server-side (hashed passwords)
-     - Replace state-based session with secure HTTP-only session cookies or JWT
-     - Implement server-side rate limiting and lockout
-     - Move Round 2 access enforcement to server
-     - Store audit logs in a server-side database
+   ADMIN CONTROL CENTER — direct access at /admin (no login required)
+   All admin functionality remains intact.
 ═══════════════════════════════════════════════════════════════════════════ */
 
-// Demo credentials — NOT a real personal password.
-// Replace with server-side authentication before production use.
-const DEMO_ADMIN_ID = "admin";
-const DEMO_ADMIN_PASSWORD = "Admin@2026!Secure";
-
-/**
- * Validates the admin password against the strong password policy.
- * Policy: 12+ chars, uppercase, lowercase, digit, special character.
- * Returns: { valid, strength, rules, passed }
- */
-function validateAdminPassword(pw) {
-  const rules = [
-    { label: "At least 12 characters", ok: pw.length >= 12 },
-    { label: "One uppercase letter (A–Z)", ok: /[A-Z]/.test(pw) },
-    { label: "One lowercase letter (a–z)", ok: /[a-z]/.test(pw) },
-    { label: "One number (0–9)", ok: /[0-9]/.test(pw) },
-    { label: "One special character (!@#$…)", ok: /[^A-Za-z0-9]/.test(pw) }
-  ];
-  const passed = rules.filter((r) => r.ok).length;
-  const valid = passed === 5;
-  let strength = "weak";
-  if (passed >= 3 && pw.length >= 8) strength = "medium";
-  if (valid) strength = "strong";
-  return { valid, strength, rules, passed };
-}
-
-/* ─── Admin team data — NO passwords, tokens, or credentials stored ─────── */
+/* ─── Admin team data — no passwords stored ─────────────────────────────── */
 const adminTeams = [
   { id: 1, name: "Cyber Titans",  email: "cyber@example.com",   r1Challenges: 6, r2Challenges: 0, time: "00:38:42", completed: true  },
   { id: 2, name: "Zero Day",      email: "zero@example.com",    r1Challenges: 6, r2Challenges: 0, time: "00:41:18", completed: true  },
@@ -440,7 +619,7 @@ const adminTeams = [
   { id: 8, name: "Shadow Stack",  email: "shadow@example.com",  r1Challenges: 1, r2Challenges: 0, time: "—",        completed: false }
 ];
 
-/* ─── Initial demo activity log — no passwords logged ───────────────────── */
+/* ─── Initial demo activity log ─────────────────────────────────────────── */
 const initialAdminLogs = [
   { ts: "10:38:42", team: "Cyber Titans", r1Time: "00:38:42", r2Time: "—", action: "Round 1 completed", challenges: "R1: 6/6, R2: —" },
   { ts: "10:41:18", team: "Zero Day",     r1Time: "00:41:18", r2Time: "—", action: "Round 1 completed", challenges: "R1: 6/6, R2: —" },
@@ -458,253 +637,7 @@ const challengeChatMessages = [
   { team: "10:49:01 · {name}", ctrl: "10:49:05 · CHALLENGE CONTROL", msg: "Challenge 06 master prompt submitted — creativity + problem solving.", reply: "Submission received. Challenge 06 completed. Heist complete." }
 ];
 
-/* ═══════════════════════════════════════════════════════════════════════════
-   AdminAuthGate — holds authentication state, session, and activity log
-═══════════════════════════════════════════════════════════════════════════ */
-function AdminAuthGate() {
-  const [adminAuthenticated, setAdminAuthenticated] = useState(false);
-  const [failedAttempts, setFailedAttempts] = useState(0);
-  const [lockoutUntil, setLockoutUntil] = useState(null);
-  const [adminLogs, setAdminLogs] = useState(initialAdminLogs);
-
-  /** Append a new entry to the activity log. Never logs passwords. */
-  function addLog(team, r1Time, r2Time, action, challenges) {
-    const ts = new Date().toLocaleTimeString("en-GB", { hour12: false });
-    setAdminLogs((prev) => [{ ts, team, r1Time, r2Time, action, challenges }, ...prev]);
-  }
-
-  /**
-   * Attempt admin login. Returns { success } or { error }.
-   * Max 5 attempts before 60-second lockout.
-   */
-  function handleAdminLogin(username, password) {
-    // Check active lockout
-    if (lockoutUntil && Date.now() < lockoutUntil) {
-      return { error: "Account temporarily locked. Please wait for the countdown." };
-    }
-
-    // Input validation
-    if (!username.trim()) return { error: "Admin ID cannot be empty." };
-    if (!password)         return { error: "Password cannot be empty." };
-
-    // Credential check
-    // TODO: Replace this comparison with a server-side authentication call.
-    if (username.trim() === DEMO_ADMIN_ID && password === DEMO_ADMIN_PASSWORD) {
-      setAdminAuthenticated(true);
-      setFailedAttempts(0);
-      setLockoutUntil(null);
-      return { success: true };
-    }
-
-    // Failed attempt
-    const next = failedAttempts + 1;
-    setFailedAttempts(next);
-    if (next >= 5) {
-      setLockoutUntil(Date.now() + 60000); // 60-second lockout
-      return { error: "Too many failed attempts. Login disabled for 60 seconds." };
-    }
-    const left = 5 - next;
-    return { error: `Invalid credentials. ${left} attempt${left !== 1 ? "s" : ""} remaining.` };
-  }
-
-  /** Log the logout action, then clear authentication state. */
-  function handleAdminLogout() {
-    addLog("—", "—", "—", "Admin logout", "—");
-    setAdminAuthenticated(false);
-  }
-
-  if (!adminAuthenticated) {
-    return (
-      <AdminLogin
-        onLogin={handleAdminLogin}
-        failedAttempts={failedAttempts}
-        lockoutUntil={lockoutUntil}
-      />
-    );
-  }
-
-  return (
-    <AdminPage
-      onAdminLogout={handleAdminLogout}
-      addLog={addLog}
-      adminLogs={adminLogs}
-    />
-  );
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   AdminLogin — shown at /admin when not authenticated
-═══════════════════════════════════════════════════════════════════════════ */
-function AdminLogin({ onLogin, failedAttempts, lockoutUntil }) {
-  const [username, setUsername]           = useState("");
-  const [password, setPassword]           = useState("");
-  const [showPassword, setShowPassword]   = useState(false);
-  const [error, setError]                 = useState("");
-  const [lockSecondsLeft, setLockSecondsLeft] = useState(0);
-
-  const pwAnalysis = password ? validateAdminPassword(password) : null;
-
-  /* Live countdown for lockout */
-  useEffect(() => {
-    if (!lockoutUntil) { setLockSecondsLeft(0); return; }
-    function tick() {
-      const left = Math.ceil((lockoutUntil - Date.now()) / 1000);
-      setLockSecondsLeft(Math.max(0, left));
-    }
-    tick();
-    const id = setInterval(tick, 500);
-    return () => clearInterval(id);
-  }, [lockoutUntil]);
-
-  const isLockedOut = !!(lockoutUntil && Date.now() < lockoutUntil && lockSecondsLeft > 0);
-
-  function handleSubmit(e) {
-    e.preventDefault();
-    if (isLockedOut) return;
-    setError("");
-    const result = onLogin(username, password);
-    if (result && result.error) setError(result.error);
-  }
-
-  return (
-    <div className="admin-login-page">
-      <div className="admin-login-box">
-
-        {/* Brand */}
-        <div className="admin-login-logo">
-          <div className="admin-brand-mark">PH</div>
-          <div>
-            <div className="admin-login-title">PROMPT HEIST</div>
-            <div className="admin-login-sub">ADMIN CONTROL CENTER</div>
-          </div>
-        </div>
-
-        {/* Security indicator */}
-        <div className="security-badge">
-          <span className="security-dot">●</span> Secure Session
-        </div>
-
-        <div className="admin-login-heading">
-          <div className="section-kicker">ADMIN ACCESS</div>
-          <h2>Administrator Login</h2>
-          <p>Enter your credentials to access the control center. Authorized personnel only.</p>
-        </div>
-
-        {/* Lockout banner */}
-        {isLockedOut && (
-          <div className="lockout-banner" role="alert">
-            🔒 Too many failed attempts. Login disabled for{" "}
-            <strong>{lockSecondsLeft}s</strong>.
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} autoComplete="off" noValidate>
-
-          {/* Admin ID */}
-          <div className="admin-field">
-            <label htmlFor="admin-id">Admin ID</label>
-            <input
-              id="admin-id"
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="Enter admin ID"
-              disabled={isLockedOut}
-              autoComplete="username"
-              spellCheck={false}
-            />
-          </div>
-
-          {/* Password with eye toggle */}
-          <div className="admin-field">
-            <label htmlFor="admin-pw">Password</label>
-            <div className="pw-field-wrap">
-              <input
-                id="admin-pw"
-                type={showPassword ? "text" : "password"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter admin password"
-                disabled={isLockedOut}
-                autoComplete="current-password"
-              />
-              <button
-                type="button"
-                className="pw-eye-btn"
-                onClick={() => setShowPassword((v) => !v)}
-                aria-label={showPassword ? "Hide password" : "Show password"}
-                tabIndex={-1}
-              >
-                {showPassword ? (
-                  /* Hide icon */
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
-                    <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
-                    <line x1="1" y1="1" x2="23" y2="23"/>
-                  </svg>
-                ) : (
-                  /* Show icon */
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                    <circle cx="12" cy="12" r="3"/>
-                  </svg>
-                )}
-              </button>
-            </div>
-
-            {/* Password strength indicator — shown while typing */}
-            {password && pwAnalysis && (
-              <div className="pw-strength-wrap">
-                <div className="pw-strength-bar">
-                  <div
-                    className={`pw-strength-fill strength-${pwAnalysis.strength}`}
-                    style={{ width: `${(pwAnalysis.passed / 5) * 100}%` }}
-                  />
-                </div>
-                <span className={`pw-strength-label strength-${pwAnalysis.strength}`}>
-                  {pwAnalysis.strength === "weak"   ? "Weak"   :
-                   pwAnalysis.strength === "medium" ? "Medium" : "Strong"}
-                </span>
-                {!pwAnalysis.valid && (
-                  <ul className="pw-requirements" aria-label="Password requirements not met">
-                    {pwAnalysis.rules.filter((r) => !r.ok).map((r, i) => (
-                      <li key={i} className="pw-req-item">✗ {r.label}</li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Error message */}
-          {error && (
-            <div className="admin-login-error" role="alert">{error}</div>
-          )}
-
-          <button
-            id="admin-login-submit"
-            className="admin-login-btn"
-            type="submit"
-            disabled={isLockedOut}
-          >
-            Sign In <span>→</span>
-          </button>
-        </form>
-
-        {/* Disclaimer note */}
-        <div className="admin-login-note">
-          {/* NOTE: Frontend-only demo — not production-secure. */}
-          This panel is for authorized event administrators only. Do not share your credentials.
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   AdminPage — shown after successful authentication
-═══════════════════════════════════════════════════════════════════════════ */
-function AdminPage({ onAdminLogout, addLog, adminLogs }) {
+function AdminPage() {
   const [section, setSection]             = useState("dashboard");
   const [selected, setSelected]           = useState([]);
   const [qualified, setQualified]         = useState([]);
@@ -714,6 +647,7 @@ function AdminPage({ onAdminLogout, addLog, adminLogs }) {
   const [confirmQualOpen, setConfirmQualOpen]     = useState(false);
   const [notice, setNotice]               = useState("");
   const [remaining, setRemaining]         = useState(5076);
+  const [adminLogs, setAdminLogs]         = useState(initialAdminLogs);
 
   useEffect(() => {
     const timer = window.setInterval(() => setRemaining((v) => Math.max(0, v - 1)), 1000);
@@ -724,6 +658,11 @@ function AdminPage({ onAdminLogout, addLog, adminLogs }) {
   const activeTeams    = 6;
   const qualifiedCount = qualified.length;
   const round2Active   = round2Unlocked ? Math.min(qualifiedCount, 3) : 0;
+
+  function addLog(team, r1Time, r2Time, action, challenges) {
+    const ts = new Date().toLocaleTimeString("en-GB", { hour12: false });
+    setAdminLogs((prev) => [{ ts, team, r1Time, r2Time, action, challenges }, ...prev]);
+  }
 
   function formatTimer(total) {
     const h = String(Math.floor(total / 3600)).padStart(2, "0");
@@ -739,7 +678,6 @@ function AdminPage({ onAdminLogout, addLog, adminLogs }) {
     );
   }
 
-  /** Open qualification confirmation modal */
   function openQualificationConfirm() {
     if (!selected.length) {
       setNotice("Select at least one completed Round 1 team first.");
@@ -748,7 +686,6 @@ function AdminPage({ onAdminLogout, addLog, adminLogs }) {
     setConfirmQualOpen(true);
   }
 
-  /** Confirmed: qualify selected teams. Round 2 remains LOCKED. */
   function confirmQualification() {
     const toQualify = adminTeams.filter((t) => selected.includes(t.id));
     toQualify.forEach((t) => {
@@ -762,7 +699,6 @@ function AdminPage({ onAdminLogout, addLog, adminLogs }) {
     );
   }
 
-  /** Confirmed: unlock Round 2 for all qualified teams. */
   function unlockRound2() {
     if (!qualified.length) {
       setNotice("Round 2 cannot be unlocked until qualified teams are confirmed.");
@@ -774,12 +710,6 @@ function AdminPage({ onAdminLogout, addLog, adminLogs }) {
     setNotice(
       `Round 2 UNLOCKED for ${qualified.length} qualified team${qualified.length > 1 ? "s" : ""}.`
     );
-  }
-
-  function handleEventStatusChange(newStatus) {
-    addLog("—", "—", "—", `Event status changed to: ${newStatus}`, "—");
-    setConfirmUnlockOpen(false);
-    setNotice(`Event status updated: ${newStatus}`);
   }
 
   const activeChatTeam = adminTeams.find((t) => t.id === chatTeam) || adminTeams[0];
@@ -814,19 +744,9 @@ function AdminPage({ onAdminLogout, addLog, adminLogs }) {
             ))}
           </nav>
         </div>
-
-        {/* Sidebar footer — security badge + logout */}
         <div className="admin-sidebar-foot">
-          <div className="security-badge sidebar-security">
-            <span className="security-dot">●</span> Authenticated
-          </div>
-          <button
-            id="admin-logout-btn"
-            className="admin-logout-btn"
-            onClick={onAdminLogout}
-          >
-            Logout
-          </button>
+          <strong>ADMIN</strong>
+          <span>EVENT CONTROL</span>
         </div>
       </aside>
 
@@ -886,7 +806,7 @@ function AdminPage({ onAdminLogout, addLog, adminLogs }) {
         </div>
       </section>
 
-      {/* ── Confirmation modal: Unlock Round 2 ── */}
+      {/* Unlock Round 2 confirmation */}
       {confirmUnlockOpen && (
         <div className="admin-modal-backdrop" role="dialog" aria-modal="true">
           <div className="admin-modal">
@@ -905,7 +825,7 @@ function AdminPage({ onAdminLogout, addLog, adminLogs }) {
         </div>
       )}
 
-      {/* ── Confirmation modal: Qualify Teams ── */}
+      {/* Qualify teams confirmation */}
       {confirmQualOpen && (
         <div className="admin-modal-backdrop" role="dialog" aria-modal="true">
           <div className="admin-modal">
@@ -946,7 +866,7 @@ function SectionTitle({ kicker, title, action }) {
   );
 }
 
-/* ─── Dashboard — Event Timing and Round 2 Qualification panels removed ─── */
+/* ─── Dashboard ─────────────────────────────────────────────────────────── */
 function AdminDashboard({ formatTimer, remaining, activeTeams, completedCount, qualifiedCount, round2Active, round2Unlocked, setSection }) {
   return <>
     <section className="admin-hero">
@@ -997,16 +917,14 @@ function AdminStat({ label, value }) {
   );
 }
 
-/* ─── Teams — shows only name and email, no credentials ────────────────── */
+/* ─── Teams ─────────────────────────────────────────────────────────────── */
 function AdminTeams() {
   return (
     <section className="admin-panel">
       <SectionTitle kicker="TEAM MANAGEMENT" title="Registered teams" />
       <div className="table-wrap">
         <table className="admin-table simple">
-          <thead>
-            <tr><th>TEAM NAME</th><th>EMAIL</th></tr>
-          </thead>
+          <thead><tr><th>TEAM NAME</th><th>EMAIL</th></tr></thead>
           <tbody>
             {adminTeams.map((team) => (
               <tr key={team.id}>
@@ -1021,7 +939,7 @@ function AdminTeams() {
   );
 }
 
-/* ─── Round 1 — qualification requires explicit confirmation modal ───────── */
+/* ─── Round 1 ────────────────────────────────────────────────────────────── */
 function AdminRound1({ completedTeams, selected, toggleEligible, qualified, openQualificationConfirm, round2Unlocked }) {
   return <>
     <section className="admin-panel">
@@ -1043,11 +961,7 @@ function AdminRound1({ completedTeams, selected, toggleEligible, qualified, open
             {adminTeams.map((team) => (
               <tr key={team.id}>
                 <td>{team.name}</td>
-                <td>
-                  <span className={team.completed ? "table-ok" : ""}>
-                    {team.r1Challenges} / 6
-                  </span>
-                </td>
+                <td><span className={team.completed ? "table-ok" : ""}>{team.r1Challenges} / 6</span></td>
                 <td>{team.r1Challenges}</td>
                 <td>{team.completed ? team.time : "—"}</td>
               </tr>
@@ -1060,8 +974,7 @@ function AdminRound1({ completedTeams, selected, toggleEligible, qualified, open
     <section className="admin-panel">
       <SectionTitle kicker="ROUND 2 QUALIFICATION" title="Select completed teams" />
       <p className="panel-note">
-        Only teams that completed Round 1 can be selected. Selection alone does{" "}
-        <strong>not</strong> unlock Round 2 — the admin must explicitly unlock it.
+        Only teams that completed Round 1 can be selected. Selection alone does <strong>not</strong> unlock Round 2.
       </p>
       <div className="table-wrap">
         <table className="admin-table qualification">
@@ -1135,11 +1048,7 @@ function AdminRound2({ qualified, unlocked, onUnlockRequest, teams }) {
         <div className="locked-message">
           <strong>ROUND 2 LOCKED</strong>
           <span>Complete qualification, then explicitly unlock the round. No team receives automatic access.</span>
-          <button
-            className="admin-btn primary"
-            disabled={!qualified.length}
-            onClick={onUnlockRequest}
-          >
+          <button className="admin-btn primary" disabled={!qualified.length} onClick={onUnlockRequest}>
             Unlock for Qualified Teams
           </button>
         </div>
@@ -1172,17 +1081,16 @@ function AdminRound2({ qualified, unlocked, onUnlockRequest, teams }) {
   </>;
 }
 
-/* ─── Team Chat — 6 challenge tabs at top ───────────────────────────────── */
+/* ─── Team Chat — 6 challenge tabs ──────────────────────────────────────── */
 function AdminChat({ teams, chatTeam, setChatTeam, activeChatTeam }) {
   const [activeChallenge, setActiveChallenge] = useState(0);
   const conv = challengeChatMessages[activeChallenge];
-  const teamName = activeChatTeam.name;
 
   return (
     <section className="admin-panel chat-monitor">
       <SectionTitle kicker="ADMIN-ONLY TEAM CHAT" title="Team Chat" />
 
-      {/* Challenge tabs — one per challenge (01–06) */}
+      {/* Challenge tabs — Challenge 01–06 */}
       <div className="challenge-tabs-row">
         {challenges.map((_, i) => (
           <button
@@ -1196,7 +1104,6 @@ function AdminChat({ teams, chatTeam, setChatTeam, activeChatTeam }) {
       </div>
 
       <div className="chat-admin-layout">
-        {/* Team list */}
         <div className="chat-team-list">
           {teams.map((team) => (
             <button
@@ -1210,18 +1117,17 @@ function AdminChat({ teams, chatTeam, setChatTeam, activeChatTeam }) {
           ))}
         </div>
 
-        {/* Chat window for selected team + challenge */}
         <div className="admin-chat-window">
           <div className="admin-chat-head">
             <div>
-              <strong>{teamName}</strong>
+              <strong>{activeChatTeam.name}</strong>
               <span>Challenge {String(activeChallenge + 1).padStart(2, "0")} conversation</span>
             </div>
             <span className="admin-only-badge">ADMIN ACCESS</span>
           </div>
           <div className="admin-messages">
             <div className="admin-message">
-              <span>{conv.team.replace("{name}", teamName)}</span>
+              <span>{conv.team.replace("{name}", activeChatTeam.name)}</span>
               <p>{conv.msg}</p>
             </div>
             <div className="admin-message control">
@@ -1231,7 +1137,6 @@ function AdminChat({ teams, chatTeam, setChatTeam, activeChatTeam }) {
           </div>
           <div className="admin-chat-note">
             Admin-only monitoring view. Each tab shows a separate challenge conversation.
-            Chat data is intentionally kept separate from the main Teams table.
           </div>
         </div>
       </div>
@@ -1253,18 +1158,11 @@ function AdminLeaderboard({ teams, qualified, unlocked }) {
       <div className="table-wrap">
         <table className="admin-table">
           <thead>
-            <tr>
-              <th>RANK</th>
-              <th>TEAM</th>
-              <th>ROUND 1</th>
-              <th>ROUND 2</th>
-              <th>TOTAL</th>
-              <th>COMPLETION TIME</th>
-            </tr>
+            <tr><th>RANK</th><th>TEAM</th><th>ROUND 1</th><th>ROUND 2</th><th>TOTAL</th><th>COMPLETION TIME</th></tr>
           </thead>
           <tbody>
             {rows.map((team, i) => {
-              const r2 = unlocked && qualified.includes(team.id) ? team.r2Challenges : null;
+              const r2    = unlocked && qualified.includes(team.id) ? team.r2Challenges : null;
               const total = team.r1Challenges + (r2 !== null ? r2 : 0);
               return (
                 <tr key={team.id}>
@@ -1280,14 +1178,12 @@ function AdminLeaderboard({ teams, qualified, unlocked }) {
           </tbody>
         </table>
       </div>
-      <p className="panel-note">
-        Round 2 progress appears only for explicitly qualified teams after Round 2 is unlocked.
-      </p>
+      <p className="panel-note">Round 2 progress appears only for qualified teams after Round 2 is unlocked.</p>
     </section>
   );
 }
 
-/* ─── Activity Logs — 5 columns, no passwords logged ────────────────────── */
+/* ─── Activity Logs — 5 columns ─────────────────────────────────────────── */
 function AdminLogs({ logs }) {
   return (
     <section className="admin-panel">
@@ -1311,9 +1207,7 @@ function AdminLogs({ logs }) {
         ))}
         {logs.length === 0 && (
           <div className="log-row">
-            <span colSpan="5" style={{ gridColumn: "1/-1", color: "#5f5f67", textAlign: "center" }}>
-              No activity logged yet.
-            </span>
+            <span style={{ gridColumn: "1/-1", color: "#5f5f67", textAlign: "center" }}>No activity logged yet.</span>
           </div>
         )}
       </div>
@@ -1321,7 +1215,7 @@ function AdminLogs({ logs }) {
   );
 }
 
-/* ─── Results — Challenges Completed columns (not raw scores) ───────────── */
+/* ─── Results — challenges completed columns ─────────────────────────────── */
 function AdminResults({ teams, qualified, unlocked }) {
   const rows = [...teams].sort((a, b) => {
     const aTotal = a.r1Challenges + (unlocked && qualified.includes(a.id) ? a.r2Challenges : 0);
@@ -1346,13 +1240,12 @@ function AdminResults({ teams, qualified, unlocked }) {
           </thead>
           <tbody>
             {rows.map((team, i) => {
-              const r2Done  = unlocked && qualified.includes(team.id) ? team.r2Challenges : null;
-              const total   = team.r1Challenges + (r2Done !== null ? r2Done : 0);
-              const status  =
+              const r2Done = unlocked && qualified.includes(team.id) ? team.r2Challenges : null;
+              const total  = team.r1Challenges + (r2Done !== null ? r2Done : 0);
+              const status =
                 unlocked && qualified.includes(team.id) ? <span className="table-ok">QUALIFIED</span> :
                 team.completed ? "ROUND 1 COMPLETE" :
                 <span className="muted-cell">IN PROGRESS</span>;
-
               return (
                 <tr key={team.id}>
                   <td>#{i + 1}</td>
@@ -1371,7 +1264,7 @@ function AdminResults({ teams, qualified, unlocked }) {
   );
 }
 
-/* ─── Rules alert (participant-facing) ───────────────────────────────────── */
+/* ─── Rules alert ────────────────────────────────────────────────────────── */
 function alertRules() {
   window.alert(
 `RULES
@@ -1388,16 +1281,13 @@ function alertRules() {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   ROOT — routes between participant app and admin auth gate
-   /admin  → AdminAuthGate (shows login screen until authenticated)
-   /       → App (participant flow — completely separate)
+   ROOT — routes /admin to dashboard directly, / to participant app
 ═══════════════════════════════════════════════════════════════════════════ */
 function Root() {
   const isAdmin =
     window.location.pathname === "/admin" ||
     window.location.pathname === "/admin/";
-  // Admin Control Center is completely isolated from participant navigation.
-  return isAdmin ? <AdminAuthGate /> : <App />;
+  return isAdmin ? <AdminPage /> : <App />;
 }
 
 createRoot(document.getElementById("root")).render(<Root />);
