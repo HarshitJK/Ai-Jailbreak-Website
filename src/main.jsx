@@ -1206,14 +1206,12 @@ function AdminResults({ teams, qualified, unlocked }) {
               <th>TEAM</th>
               <th>CHALLENGES COMPLETED IN ROUND 1</th>
               <th>CHALLENGES COMPLETED IN ROUND 2</th>
-              <th>TOTAL</th>
               <th>FINAL STATUS</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((team, i) => {
               const r2Done = unlocked && qualified.includes(team.id) ? team.r2Challenges : null;
-              const total  = team.r1Challenges + (r2Done !== null ? r2Done : 0);
               const status =
                 unlocked && qualified.includes(team.id) ? <span className="table-ok">QUALIFIED</span> :
                 team.completed ? "ROUND 1 COMPLETE" :
@@ -1224,7 +1222,6 @@ function AdminResults({ teams, qualified, unlocked }) {
                   <td>{team.name}</td>
                   <td>{team.r1Challenges} / 6</td>
                   <td>{r2Done !== null ? `${r2Done} / 6` : "—"}</td>
-                  <td>{total}</td>
                   <td>{status}</td>
                 </tr>
               );
