@@ -1,0 +1,227 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
+
+:root {
+  font-family: Inter, system-ui, sans-serif;
+  color: #f8fafc;
+  background: #090909;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  --bg: #090909;
+  --panel: #0f0f0f;
+  --surface: #141414;
+  --elevated: #1a1a1a;
+  --red: #dc2626;
+  --red-dark: #991b1b;
+  --red-bright: #ef4444;
+  --text: #f8fafc;
+  --muted: #a1a1aa;
+  --faint: #71717a;
+  --border: rgba(255,255,255,.08);
+}
+
+* { box-sizing: border-box; }
+html, body, #root { min-height: 100%; margin: 0; }
+body { background: var(--bg); }
+button, input, textarea { font: inherit; }
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; }
+.app { min-height: 100vh; background: var(--bg); }
+
+.auth-page {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 55% 45%;
+  background: #090909;
+}
+
+.intro-panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-right: 1px solid var(--border);
+  padding: 54px 8vw;
+}
+
+.intro-inner { width: min(680px, 100%); }
+.brand { display: flex; align-items: center; gap: 13px; }
+.brand-mark {
+  width: 38px; height: 38px; border: 1px solid rgba(220,38,38,.45);
+  display: grid; place-items: center; color: #fff; font: 700 13px "Space Grotesk";
+  background: #111; letter-spacing: -.03em;
+}
+.brand-name { font: 700 16px "Space Grotesk"; letter-spacing: .13em; }
+.brand-tagline { color: var(--faint); font-size: 11px; margin-top: 3px; }
+
+.intro-copy { margin-top: 82px; }
+.eyebrow { color: #ef4444; font-size: 10px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; }
+.intro-copy h1 {
+  font: 700 clamp(42px, 5vw, 74px)/.98 "Space Grotesk";
+  margin: 10px 0 13px; letter-spacing: -.045em;
+}
+.lead { color: var(--muted); font-size: 17px; margin: 0; }
+.overview { margin-top: 42px; max-width: 650px; }
+.overview h2 { font: 600 18px "Space Grotesk"; margin: 0 0 16px; }
+.overview-points { color: var(--muted); font-size: 14px; line-height: 1.7; margin: 0; padding-left: 22px; }
+.overview-points li { margin: 9px 0; }
+.overview .motto { color: #171717; font-weight: 600; letter-spacing: .04em; margin-top: 25px; }
+
+.auth-panel {
+  display: flex; align-items: center; justify-content: center; padding: 48px;
+  background: #0c0c0c;
+}
+.auth-box { width: min(420px, 100%); }
+.auth-tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 44px; }
+.tab {
+  background: transparent; border: 0; color: var(--faint); padding: 0 0 14px;
+  margin-right: 27px; font-size: 13px; font-weight: 600; position: relative;
+}
+.tab.active { color: var(--text); }
+.tab.active::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: var(--red);
+}
+.auth-heading h2 { font: 600 30px "Space Grotesk"; margin: 10px 0 9px; letter-spacing: -.025em; }
+.auth-heading p { color: var(--muted); font-size: 13px; margin: 0 0 31px; }
+
+form label { display: block; color: #d4d4d8; font-size: 12px; font-weight: 600; margin: 0 0 19px; }
+input, textarea {
+  width: 100%; border: 1px solid var(--border); outline: none; color: var(--text);
+  background: #111; border-radius: 9px; transition: border .18s, background .18s;
+}
+input { height: 48px; padding: 0 14px; display: block; margin-top: 8px; font-size: 13px; }
+input::placeholder, textarea::placeholder { color: #52525b; }
+input:focus, textarea:focus { border-color: rgba(220,38,38,.6); background: #131313; }
+
+.primary-btn {
+  width: 100%; height: 49px; border: 0; border-radius: 8px; background: var(--red);
+  color: #fff; font-weight: 700; font-size: 13px; margin-top: 10px;
+  transition: transform .15s, background .15s;
+}
+.primary-btn:hover { background: var(--red-bright); transform: translateY(-1px); }
+.primary-btn span { margin-left: 8px; }
+.primary-btn.small { width: auto; padding: 0 21px; }
+
+.form-message {
+  border: 1px solid rgba(220,38,38,.28); background: rgba(220,38,38,.06);
+  color: #fca5a5; padding: 11px 12px; border-radius: 7px; margin-top: 15px; font-size: 12px;
+}
+.form-message.success { border-color: rgba(255,255,255,.1); color: #d4d4d8; background: #111; }
+.auth-footer { text-align: center; color: var(--faint); font-size: 12px; margin-top: 23px; }
+.auth-footer button { border: 0; background: none; color: #f87171; padding: 0; }
+
+.challenge-page {
+  min-height: 100vh; display: grid; grid-template-columns: 260px minmax(0, 1fr) 230px;
+  background: #090909;
+}
+.sidebar {
+  background: #0d0d0d; border-right: 1px solid var(--border); padding: 23px 16px;
+  display: flex; flex-direction: column; min-height: 100vh;
+}
+.brand-compact .brand-mark { width: 32px; height: 32px; }
+.brand-compact .brand-name { font-size: 13px; }
+.sidebar-top { padding: 0 8px; }
+.progress-title { color: var(--faint); font-size: 10px; text-transform: uppercase; letter-spacing: .13em; margin-top: 45px; }
+.progress-number { font: 600 22px "Space Grotesk"; margin-top: 7px; }
+.progress-track { height: 3px; background: #202020; margin-top: 12px; }
+.progress-track div { height: 100%; background: var(--red); transition: width .35s; }
+.challenge-nav { margin-top: 28px; }
+.challenge-item {
+  width: 100%; text-align: left; background: transparent; border: 0; border-left: 2px solid transparent;
+  padding: 12px 11px; margin: 2px 0; color: #a1a1aa; border-radius: 0 6px 6px 0;
+}
+.challenge-item span { display: block; font-size: 12px; font-weight: 600; }
+.challenge-item small { display: block; font-size: 10px; color: #52525b; margin-top: 5px; }
+.challenge-item.selected { background: #151515; color: #fff; border-left-color: var(--red); }
+.challenge-item.selected small, .challenge-item.done small { color: #ef4444; }
+.challenge-item.done { color: #d4d4d8; }
+.challenge-item.unavailable { opacity: .36; }
+.sidebar-bottom { margin-top: auto; border-top: 1px solid var(--border); padding-top: 13px; }
+.sidebar-bottom button {
+  width: 100%; background: transparent; border: 0; text-align: left; color: #71717a;
+  padding: 10px 8px; font-size: 12px;
+}
+.sidebar-bottom button:hover { color: #fff; }
+
+.chat-area { min-width: 0; display: flex; flex-direction: column; }
+.chat-header {
+  height: 79px; padding: 0 34px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.chat-header h1 { font: 600 17px "Space Grotesk"; margin: 5px 0 0; }
+.team-chip { border: 1px solid var(--border); background: #111; padding: 8px 11px; border-radius: 6px; font-size: 11px; color: #a1a1aa; }
+.chat-content { width: min(900px, calc(100% - 56px)); margin: 0 auto; flex: 1; padding: 40px 0 30px; display: flex; flex-direction: column; }
+.challenge-label { color: #ef4444; font: 600 11px "Space Grotesk"; letter-spacing: .1em; margin-bottom: 20px; }
+.messages { flex: 1; }
+.message-row { display: flex; gap: 13px; margin-bottom: 20px; }
+.message-row.user { flex-direction: row-reverse; }
+.message-row.user .message-bubble { background: #151515; border-color: rgba(220,38,38,.14); }
+.message-row.user .message-text { white-space: pre-wrap; }
+.message-avatar {
+  flex: 0 0 30px; width: 30px; height: 30px; border: 1px solid var(--border); background: #111;
+  display: grid; place-items: center; font: 700 9px "Space Grotesk"; color: #a1a1aa; border-radius: 50%;
+}
+.message-avatar.red { color: #fff; border-color: rgba(220,38,38,.35); background: #2a1010; }
+.message-bubble { max-width: min(700px, 80%); border: 1px solid var(--border); background: #101010; border-radius: 8px; padding: 13px 15px; }
+.message-author { font-size: 10px; color: #71717a; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 8px; }
+.message-text { font-size: 13px; line-height: 1.75; color: #d4d4d8; white-space: pre-line; }
+.typing { display: flex; gap: 4px; padding: 4px 0; }
+.typing i { width: 5px; height: 5px; border-radius: 50%; background: #71717a; animation: blink 1s infinite; }
+.typing i:nth-child(2) { animation-delay: .15s; }
+.typing i:nth-child(3) { animation-delay: .3s; }
+@keyframes blink { 0%,100%{opacity:.25} 50%{opacity:1} }
+
+.composer-wrap { position: relative; margin-top: 25px; }
+.composer-wrap textarea { resize: none; padding: 14px 80px 14px 15px; line-height: 1.5; font-size: 13px; }
+.send-btn {
+  position: absolute; right: 9px; bottom: 9px; border: 0; border-radius: 6px; background: var(--red);
+  color: #fff; height: 33px; padding: 0 11px; font-size: 11px; font-weight: 700;
+}
+.send-btn:disabled { opacity: .35; }
+.composer-note { text-align: right; color: #52525b; font-size: 9px; margin-top: 7px; }
+
+
+@media (max-width: 760px) {
+  .auth-page { grid-template-columns: 1fr; }
+  .intro-panel { min-height: auto; border-right: 0; border-bottom: 1px solid var(--border); padding: 38px 24px 42px; }
+  .intro-inner { text-align: center; }
+  .brand { justify-content: center; }
+  .intro-copy { margin-top: 44px; }
+  .intro-copy h1 { font-size: 46px; }
+  .overview { margin-top: 35px; }
+  .overview p { font-size: 13px; }
+  .auth-panel { padding: 38px 24px 55px; }
+  .auth-box { max-width: 430px; }
+
+  .challenge-page { grid-template-columns: 1fr; }
+  .sidebar {
+    position: fixed; z-index: 60; left: 0; top: 0; bottom: 0; width: 275px;
+    transform: translateX(-100%); transition: transform .2s ease; box-shadow: 20px 0 50px rgba(0,0,0,.45);
+  }
+  .sidebar.open { transform: translateX(0); }
+  .mobile-backdrop { position: fixed; inset: 0; z-index: 55; background: rgba(0,0,0,.65); }
+  .chat-header { padding: 0 20px 0 68px; }
+  .chat-content { width: calc(100% - 30px); padding-top: 30px; }
+  .team-chip { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .message-bubble { max-width: 86%; }
+}
+
+@media (max-width: 430px) {
+  .intro-copy h1 { font-size: 39px; }
+  .lead { font-size: 14px; }
+  .auth-heading h2 { font-size: 27px; }
+  .chat-header h1 { font-size: 15px; }
+  .completion h2 { font-size: 34px; }
+}
+
+/* Final requested layout changes */
+.chat-layout { grid-template-columns: 280px minmax(0, 1fr) !important; }
+.challenge-page { grid-template-columns: 280px minmax(0, 1fr) !important; }
+.message-row { display: flex; gap: 13px; margin-bottom: 28px; }
+.message-bubble { max-width: 100%; border: 0 !important; background: transparent !important; border-radius: 0 !important; padding: 0 !important; box-shadow: none !important; }
+.message-row.user .message-bubble { background: transparent !important; border-color: transparent !important; }
+.message-text { color: #171717 !important; }
+.message-author { color: #555 !important; }
+
+/* Brighten the challenge chat text */
+.message-text { color: #f1f1f1 !important; }
+.message-author { color: #a3a3a3 !important; }
+.challenge-label { color: #ff4d4d !important; }
