@@ -1,7 +1,10 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   SHARED DATA
+═══════════════════════════════════════════════════════════════════════════ */
 const challenges = [
   "Create a prompt that generates a startup idea in under 100 words.",
   "Write a prompt that helps students learn faster using AI.",
@@ -21,6 +24,9 @@ const overview = [
   "The fastest teams with the highest progress will be declared winners."
 ];
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   PARTICIPANT APP — do NOT modify this section
+═══════════════════════════════════════════════════════════════════════════ */
 function App() {
   const [page, setPage] = useState("auth");
   const [authMode, setAuthMode] = useState("register");
@@ -105,7 +111,7 @@ function App() {
     setLoading(true);
 
     setTimeout(() => {
-      const nextCompleted = [...new Set([...completed, active])].sort((a,b) => a-b);
+      const nextCompleted = [...new Set([...completed, active])].sort((a, b) => a - b);
       setCompleted(nextCompleted);
       setLoading(false);
 
@@ -381,37 +387,343 @@ function Completion({ progress, onHome }) {
   );
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   ADMIN — SECURITY & AUTHENTICATION LAYER
+   ─────────────────────────────────────────────────────────────────────────
+   IMPORTANT: This is a FRONTEND-ONLY demo implementation.
+   Frontend authentication is NOT production-secure — credentials can be
+   inspected via browser developer tools.
 
+   TODO (backend migration):
+     - Move credential validation to server-side (hashed passwords)
+     - Replace state-based session with secure HTTP-only session cookies or JWT
+     - Implement server-side rate limiting and lockout
+     - Move Round 2 access enforcement to server
+     - Store audit logs in a server-side database
+═══════════════════════════════════════════════════════════════════════════ */
+
+// Demo credentials — NOT a real personal password.
+// Replace with server-side authentication before production use.
+const DEMO_ADMIN_ID = "admin";
+const DEMO_ADMIN_PASSWORD = "Admin@2026!Secure";
+
+/**
+ * Validates the admin password against the strong password policy.
+ * Policy: 12+ chars, uppercase, lowercase, digit, special character.
+ * Returns: { valid, strength, rules, passed }
+ */
+function validateAdminPassword(pw) {
+  const rules = [
+    { label: "At least 12 characters", ok: pw.length >= 12 },
+    { label: "One uppercase letter (A–Z)", ok: /[A-Z]/.test(pw) },
+    { label: "One lowercase letter (a–z)", ok: /[a-z]/.test(pw) },
+    { label: "One number (0–9)", ok: /[0-9]/.test(pw) },
+    { label: "One special character (!@#$…)", ok: /[^A-Za-z0-9]/.test(pw) }
+  ];
+  const passed = rules.filter((r) => r.ok).length;
+  const valid = passed === 5;
+  let strength = "weak";
+  if (passed >= 3 && pw.length >= 8) strength = "medium";
+  if (valid) strength = "strong";
+  return { valid, strength, rules, passed };
+}
+
+/* ─── Admin team data — NO passwords, tokens, or credentials stored ─────── */
 const adminTeams = [
-  { id: 1, name: "Cyber Titans", email: "cyber@example.com", progress: "6 / 6", submissions: 6, time: "00:38:42", completed: true, r1: 92, r2: 0, total: 92, attempts: 0, r2Progress: "—" },
-  { id: 2, name: "Zero Day", email: "zero@example.com", progress: "6 / 6", submissions: 6, time: "00:41:18", completed: true, r1: 88, r2: 0, total: 88, attempts: 0, r2Progress: "—" },
-  { id: 3, name: "Prompt X", email: "promptx@example.com", progress: "6 / 6", submissions: 6, time: "00:44:09", completed: true, r1: 84, r2: 0, total: 84, attempts: 0, r2Progress: "—" },
-  { id: 4, name: "Root Access", email: "root@example.com", progress: "6 / 6", submissions: 6, time: "00:49:27", completed: true, r1: 81, r2: 0, total: 81, attempts: 0, r2Progress: "—" },
-  { id: 5, name: "Byte Force", email: "byte@example.com", progress: "4 / 6", submissions: 4, time: "—", completed: false, r1: 0, r2: 0, total: 0, attempts: 0, r2Progress: "—" },
-  { id: 6, name: "Null Pointer", email: "null@example.com", progress: "3 / 6", submissions: 3, time: "—", completed: false, r1: 0, r2: 0, total: 0, attempts: 0, r2Progress: "—" },
-  { id: 7, name: "Code Breakers", email: "code@example.com", progress: "2 / 6", submissions: 2, time: "—", completed: false, r1: 0, r2: 0, total: 0, attempts: 0, r2Progress: "—" },
-  { id: 8, name: "Shadow Stack", email: "shadow@example.com", progress: "1 / 6", submissions: 1, time: "—", completed: false, r1: 0, r2: 0, total: 0, attempts: 0, r2Progress: "—" }
+  { id: 1, name: "Cyber Titans",  email: "cyber@example.com",   r1Challenges: 6, r2Challenges: 0, time: "00:38:42", completed: true  },
+  { id: 2, name: "Zero Day",      email: "zero@example.com",    r1Challenges: 6, r2Challenges: 0, time: "00:41:18", completed: true  },
+  { id: 3, name: "Prompt X",      email: "promptx@example.com", r1Challenges: 6, r2Challenges: 0, time: "00:44:09", completed: true  },
+  { id: 4, name: "Root Access",   email: "root@example.com",    r1Challenges: 6, r2Challenges: 0, time: "00:49:27", completed: true  },
+  { id: 5, name: "Byte Force",    email: "byte@example.com",    r1Challenges: 4, r2Challenges: 0, time: "—",        completed: false },
+  { id: 6, name: "Null Pointer",  email: "null@example.com",    r1Challenges: 3, r2Challenges: 0, time: "—",        completed: false },
+  { id: 7, name: "Code Breakers", email: "code@example.com",    r1Challenges: 2, r2Challenges: 0, time: "—",        completed: false },
+  { id: 8, name: "Shadow Stack",  email: "shadow@example.com",  r1Challenges: 1, r2Challenges: 0, time: "—",        completed: false }
 ];
 
-function AdminPage() {
-  const [section, setSection] = useState("dashboard");
-  const [selected, setSelected] = useState([]);
-  const [qualified, setQualified] = useState([]);
+/* ─── Initial demo activity log — no passwords logged ───────────────────── */
+const initialAdminLogs = [
+  { ts: "10:38:42", team: "Cyber Titans", r1Time: "00:38:42", r2Time: "—", action: "Round 1 completed", challenges: "R1: 6/6, R2: —" },
+  { ts: "10:41:18", team: "Zero Day",     r1Time: "00:41:18", r2Time: "—", action: "Round 1 completed", challenges: "R1: 6/6, R2: —" },
+  { ts: "10:44:09", team: "Prompt X",     r1Time: "00:44:09", r2Time: "—", action: "Round 1 completed", challenges: "R1: 6/6, R2: —" },
+  { ts: "10:49:27", team: "Root Access",  r1Time: "00:49:27", r2Time: "—", action: "Round 1 completed", challenges: "R1: 6/6, R2: —" }
+];
+
+/* ─── Demo per-challenge chat conversations ──────────────────────────────── */
+const challengeChatMessages = [
+  { team: "10:31:04 · {name}", ctrl: "10:31:08 · CHALLENGE CONTROL", msg: "Challenge 01 prompt submitted — startup idea generation.", reply: "Submission received. Challenge 01 completed. Good work." },
+  { team: "10:35:22 · {name}", ctrl: "10:35:27 · CHALLENGE CONTROL", msg: "Challenge 02 prompt submitted — student learning accelerator.", reply: "Submission received. Challenge 02 completed." },
+  { team: "10:39:11 · {name}", ctrl: "10:39:14 · CHALLENGE CONTROL", msg: "Challenge 03 prompt submitted — product launch marketing.", reply: "Submission received. Challenge 03 completed." },
+  { team: "10:42:55 · {name}", ctrl: "10:42:58 · CHALLENGE CONTROL", msg: "Challenge 04 prompt submitted — research paper summariser.", reply: "Submission received. Challenge 04 completed." },
+  { team: "10:46:33 · {name}", ctrl: "10:46:37 · CHALLENGE CONTROL", msg: "Challenge 05 prompt submitted — business idea generator.", reply: "Submission received. Challenge 05 completed." },
+  { team: "10:49:01 · {name}", ctrl: "10:49:05 · CHALLENGE CONTROL", msg: "Challenge 06 master prompt submitted — creativity + problem solving.", reply: "Submission received. Challenge 06 completed. Heist complete." }
+];
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   AdminAuthGate — holds authentication state, session, and activity log
+═══════════════════════════════════════════════════════════════════════════ */
+function AdminAuthGate() {
+  const [adminAuthenticated, setAdminAuthenticated] = useState(false);
+  const [failedAttempts, setFailedAttempts] = useState(0);
+  const [lockoutUntil, setLockoutUntil] = useState(null);
+  const [adminLogs, setAdminLogs] = useState(initialAdminLogs);
+
+  /** Append a new entry to the activity log. Never logs passwords. */
+  function addLog(team, r1Time, r2Time, action, challenges) {
+    const ts = new Date().toLocaleTimeString("en-GB", { hour12: false });
+    setAdminLogs((prev) => [{ ts, team, r1Time, r2Time, action, challenges }, ...prev]);
+  }
+
+  /**
+   * Attempt admin login. Returns { success } or { error }.
+   * Max 5 attempts before 60-second lockout.
+   */
+  function handleAdminLogin(username, password) {
+    // Check active lockout
+    if (lockoutUntil && Date.now() < lockoutUntil) {
+      return { error: "Account temporarily locked. Please wait for the countdown." };
+    }
+
+    // Input validation
+    if (!username.trim()) return { error: "Admin ID cannot be empty." };
+    if (!password)         return { error: "Password cannot be empty." };
+
+    // Credential check
+    // TODO: Replace this comparison with a server-side authentication call.
+    if (username.trim() === DEMO_ADMIN_ID && password === DEMO_ADMIN_PASSWORD) {
+      setAdminAuthenticated(true);
+      setFailedAttempts(0);
+      setLockoutUntil(null);
+      return { success: true };
+    }
+
+    // Failed attempt
+    const next = failedAttempts + 1;
+    setFailedAttempts(next);
+    if (next >= 5) {
+      setLockoutUntil(Date.now() + 60000); // 60-second lockout
+      return { error: "Too many failed attempts. Login disabled for 60 seconds." };
+    }
+    const left = 5 - next;
+    return { error: `Invalid credentials. ${left} attempt${left !== 1 ? "s" : ""} remaining.` };
+  }
+
+  /** Log the logout action, then clear authentication state. */
+  function handleAdminLogout() {
+    addLog("—", "—", "—", "Admin logout", "—");
+    setAdminAuthenticated(false);
+  }
+
+  if (!adminAuthenticated) {
+    return (
+      <AdminLogin
+        onLogin={handleAdminLogin}
+        failedAttempts={failedAttempts}
+        lockoutUntil={lockoutUntil}
+      />
+    );
+  }
+
+  return (
+    <AdminPage
+      onAdminLogout={handleAdminLogout}
+      addLog={addLog}
+      adminLogs={adminLogs}
+    />
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   AdminLogin — shown at /admin when not authenticated
+═══════════════════════════════════════════════════════════════════════════ */
+function AdminLogin({ onLogin, failedAttempts, lockoutUntil }) {
+  const [username, setUsername]           = useState("");
+  const [password, setPassword]           = useState("");
+  const [showPassword, setShowPassword]   = useState(false);
+  const [error, setError]                 = useState("");
+  const [lockSecondsLeft, setLockSecondsLeft] = useState(0);
+
+  const pwAnalysis = password ? validateAdminPassword(password) : null;
+
+  /* Live countdown for lockout */
+  useEffect(() => {
+    if (!lockoutUntil) { setLockSecondsLeft(0); return; }
+    function tick() {
+      const left = Math.ceil((lockoutUntil - Date.now()) / 1000);
+      setLockSecondsLeft(Math.max(0, left));
+    }
+    tick();
+    const id = setInterval(tick, 500);
+    return () => clearInterval(id);
+  }, [lockoutUntil]);
+
+  const isLockedOut = !!(lockoutUntil && Date.now() < lockoutUntil && lockSecondsLeft > 0);
+
+  function handleSubmit(e) {
+    e.preventDefault();
+    if (isLockedOut) return;
+    setError("");
+    const result = onLogin(username, password);
+    if (result && result.error) setError(result.error);
+  }
+
+  return (
+    <div className="admin-login-page">
+      <div className="admin-login-box">
+
+        {/* Brand */}
+        <div className="admin-login-logo">
+          <div className="admin-brand-mark">PH</div>
+          <div>
+            <div className="admin-login-title">PROMPT HEIST</div>
+            <div className="admin-login-sub">ADMIN CONTROL CENTER</div>
+          </div>
+        </div>
+
+        {/* Security indicator */}
+        <div className="security-badge">
+          <span className="security-dot">●</span> Secure Session
+        </div>
+
+        <div className="admin-login-heading">
+          <div className="section-kicker">ADMIN ACCESS</div>
+          <h2>Administrator Login</h2>
+          <p>Enter your credentials to access the control center. Authorized personnel only.</p>
+        </div>
+
+        {/* Lockout banner */}
+        {isLockedOut && (
+          <div className="lockout-banner" role="alert">
+            🔒 Too many failed attempts. Login disabled for{" "}
+            <strong>{lockSecondsLeft}s</strong>.
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} autoComplete="off" noValidate>
+
+          {/* Admin ID */}
+          <div className="admin-field">
+            <label htmlFor="admin-id">Admin ID</label>
+            <input
+              id="admin-id"
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="Enter admin ID"
+              disabled={isLockedOut}
+              autoComplete="username"
+              spellCheck={false}
+            />
+          </div>
+
+          {/* Password with eye toggle */}
+          <div className="admin-field">
+            <label htmlFor="admin-pw">Password</label>
+            <div className="pw-field-wrap">
+              <input
+                id="admin-pw"
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Enter admin password"
+                disabled={isLockedOut}
+                autoComplete="current-password"
+              />
+              <button
+                type="button"
+                className="pw-eye-btn"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                tabIndex={-1}
+              >
+                {showPassword ? (
+                  /* Hide icon */
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+                    <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+                    <line x1="1" y1="1" x2="23" y2="23"/>
+                  </svg>
+                ) : (
+                  /* Show icon */
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                  </svg>
+                )}
+              </button>
+            </div>
+
+            {/* Password strength indicator — shown while typing */}
+            {password && pwAnalysis && (
+              <div className="pw-strength-wrap">
+                <div className="pw-strength-bar">
+                  <div
+                    className={`pw-strength-fill strength-${pwAnalysis.strength}`}
+                    style={{ width: `${(pwAnalysis.passed / 5) * 100}%` }}
+                  />
+                </div>
+                <span className={`pw-strength-label strength-${pwAnalysis.strength}`}>
+                  {pwAnalysis.strength === "weak"   ? "Weak"   :
+                   pwAnalysis.strength === "medium" ? "Medium" : "Strong"}
+                </span>
+                {!pwAnalysis.valid && (
+                  <ul className="pw-requirements" aria-label="Password requirements not met">
+                    {pwAnalysis.rules.filter((r) => !r.ok).map((r, i) => (
+                      <li key={i} className="pw-req-item">✗ {r.label}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Error message */}
+          {error && (
+            <div className="admin-login-error" role="alert">{error}</div>
+          )}
+
+          <button
+            id="admin-login-submit"
+            className="admin-login-btn"
+            type="submit"
+            disabled={isLockedOut}
+          >
+            Sign In <span>→</span>
+          </button>
+        </form>
+
+        {/* Disclaimer note */}
+        <div className="admin-login-note">
+          {/* NOTE: Frontend-only demo — not production-secure. */}
+          This panel is for authorized event administrators only. Do not share your credentials.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   AdminPage — shown after successful authentication
+═══════════════════════════════════════════════════════════════════════════ */
+function AdminPage({ onAdminLogout, addLog, adminLogs }) {
+  const [section, setSection]             = useState("dashboard");
+  const [selected, setSelected]           = useState([]);
+  const [qualified, setQualified]         = useState([]);
   const [round2Unlocked, setRound2Unlocked] = useState(false);
-  const [chatTeam, setChatTeam] = useState(adminTeams[0].id);
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [notice, setNotice] = useState("");
-  const [remaining, setRemaining] = useState(5076);
+  const [chatTeam, setChatTeam]           = useState(adminTeams[0].id);
+  const [confirmUnlockOpen, setConfirmUnlockOpen] = useState(false);
+  const [confirmQualOpen, setConfirmQualOpen]     = useState(false);
+  const [notice, setNotice]               = useState("");
+  const [remaining, setRemaining]         = useState(5076);
 
   useEffect(() => {
-    const timer = window.setInterval(() => setRemaining((value) => Math.max(0, value - 1)), 1000);
+    const timer = window.setInterval(() => setRemaining((v) => Math.max(0, v - 1)), 1000);
     return () => window.clearInterval(timer);
   }, []);
 
   const completedTeams = adminTeams.filter((t) => t.completed);
-  const activeTeams = 6;
+  const activeTeams    = 6;
   const qualifiedCount = qualified.length;
-  const round2Active = round2Unlocked ? Math.min(qualifiedCount, 3) : 0;
+  const round2Active   = round2Unlocked ? Math.min(qualifiedCount, 3) : 0;
 
   function formatTimer(total) {
     const h = String(Math.floor(total / 3600)).padStart(2, "0");
@@ -421,38 +733,60 @@ function AdminPage() {
   }
 
   function toggleEligible(id) {
-    if (round2Unlocked || !completedTeams.some((team) => team.id === id)) return;
-    setSelected((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
+    if (round2Unlocked || !completedTeams.some((t) => t.id === id)) return;
+    setSelected((cur) =>
+      cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]
+    );
   }
 
-  function confirmQualification() {
+  /** Open qualification confirmation modal */
+  function openQualificationConfirm() {
     if (!selected.length) {
       setNotice("Select at least one completed Round 1 team first.");
       return;
     }
-    setQualified(selected);
-    setSelected([]);
-    setNotice(`${selected.length} team${selected.length > 1 ? "s" : ""} qualified for Round 2. Round 2 is still LOCKED.`);
+    setConfirmQualOpen(true);
   }
 
+  /** Confirmed: qualify selected teams. Round 2 remains LOCKED. */
+  function confirmQualification() {
+    const toQualify = adminTeams.filter((t) => selected.includes(t.id));
+    toQualify.forEach((t) => {
+      addLog(t.name, t.time, "—", "Team qualified for Round 2", `R1: ${t.r1Challenges}/6, R2: —`);
+    });
+    setQualified(selected);
+    setSelected([]);
+    setConfirmQualOpen(false);
+    setNotice(
+      `${toQualify.length} team${toQualify.length > 1 ? "s" : ""} qualified for Round 2. Round 2 is still LOCKED.`
+    );
+  }
+
+  /** Confirmed: unlock Round 2 for all qualified teams. */
   function unlockRound2() {
     if (!qualified.length) {
       setNotice("Round 2 cannot be unlocked until qualified teams are confirmed.");
       return;
     }
     setRound2Unlocked(true);
-    setNotice(`Round 2 UNLOCKED for ${qualified.length} qualified team${qualified.length > 1 ? "s" : ""}.`);
+    setConfirmUnlockOpen(false);
+    addLog("—", "—", "—", "Round 2 unlocked", `${qualified.length} team${qualified.length > 1 ? "s" : ""} granted access`);
+    setNotice(
+      `Round 2 UNLOCKED for ${qualified.length} qualified team${qualified.length > 1 ? "s" : ""}.`
+    );
   }
 
-  function runAction(action) {
-    setNotice(action);
-    setConfirmOpen(false);
+  function handleEventStatusChange(newStatus) {
+    addLog("—", "—", "—", `Event status changed to: ${newStatus}`, "—");
+    setConfirmUnlockOpen(false);
+    setNotice(`Event status updated: ${newStatus}`);
   }
 
   const activeChatTeam = adminTeams.find((t) => t.id === chatTeam) || adminTeams[0];
 
   return (
     <main className="admin-shell">
+      {/* ── Sidebar ── */}
       <aside className="admin-sidebar">
         <div>
           <div className="admin-brand">
@@ -461,19 +795,48 @@ function AdminPage() {
           </div>
           <nav className="admin-nav">
             {[
-              ["dashboard", "Dashboard"], ["teams", "Teams"], ["round1", "Round 1"], ["round2", "Round 2"],
-              ["chat", "Team Chat"], ["leaderboard", "Leaderboard"], ["logs", "Activity Logs"], ["results", "Results"]
+              ["dashboard",   "Dashboard"],
+              ["teams",       "Teams"],
+              ["round1",      "Round 1"],
+              ["round2",      "Round 2"],
+              ["chat",        "Team Chat"],
+              ["leaderboard", "Leaderboard"],
+              ["logs",        "Activity Logs"],
+              ["results",     "Results"]
             ].map(([id, label]) => (
-              <button key={id} className={section === id ? "admin-nav-item active" : "admin-nav-item"} onClick={() => setSection(id)}>{label}</button>
+              <button
+                key={id}
+                className={section === id ? "admin-nav-item active" : "admin-nav-item"}
+                onClick={() => setSection(id)}
+              >
+                {label}
+              </button>
             ))}
           </nav>
         </div>
-        <div className="admin-sidebar-foot"><strong>ADMIN</strong><span>EVENT CONTROL</span></div>
+
+        {/* Sidebar footer — security badge + logout */}
+        <div className="admin-sidebar-foot">
+          <div className="security-badge sidebar-security">
+            <span className="security-dot">●</span> Authenticated
+          </div>
+          <button
+            id="admin-logout-btn"
+            className="admin-logout-btn"
+            onClick={onAdminLogout}
+          >
+            Logout
+          </button>
+        </div>
       </aside>
 
+      {/* ── Main content ── */}
       <section className="admin-main">
         <header className="admin-header">
-          <div><div className="admin-eyebrow">PROMPT HEIST</div><h1>AI JAILBREAK SYMPOSIUM</h1></div>
+          <div>
+            <div className="admin-eyebrow">PROMPT HEIST</div>
+            <h1>AI JAILBREAK SYMPOSIUM</h1>
+          </div>
           <div className="admin-header-state">
             <div><span>EVENT STATUS</span><strong className="live-dot">LIVE</strong></div>
             <div><span>CURRENT ROUND</span><strong>{round2Unlocked ? "ROUND 2" : "ROUND 1"}</strong></div>
@@ -482,42 +845,81 @@ function AdminPage() {
         </header>
 
         <div className="admin-content">
-          {notice && <div className="admin-notice">{notice}<button onClick={() => setNotice("")}>×</button></div>}
+          {notice && (
+            <div className="admin-notice">
+              {notice}
+              <button onClick={() => setNotice("")}>×</button>
+            </div>
+          )}
 
-          {section === "dashboard" && <AdminDashboard formatTimer={formatTimer} remaining={remaining} activeTeams={activeTeams} completedCount={completedTeams.length} qualifiedCount={qualifiedCount} round2Active={round2Active} round2Unlocked={round2Unlocked} setSection={setSection} />}
-          {section === "teams" && <AdminTeams />}
-          {section === "round1" && <AdminRound1 completedTeams={completedTeams} selected={selected} toggleEligible={toggleEligible} qualified={qualified} confirmQualification={confirmQualification} />}
-          {section === "round2" && <AdminRound2 qualified={qualified} unlocked={round2Unlocked} unlockRound2={unlockRound2} teams={adminTeams} />}
-          {section === "chat" && <AdminChat teams={adminTeams} chatTeam={chatTeam} setChatTeam={setChatTeam} activeChatTeam={activeChatTeam} />}
+          {section === "dashboard"   && <AdminDashboard formatTimer={formatTimer} remaining={remaining} activeTeams={activeTeams} completedCount={completedTeams.length} qualifiedCount={qualifiedCount} round2Active={round2Active} round2Unlocked={round2Unlocked} setSection={setSection} />}
+          {section === "teams"       && <AdminTeams />}
+          {section === "round1"      && <AdminRound1 completedTeams={completedTeams} selected={selected} toggleEligible={toggleEligible} qualified={qualified} openQualificationConfirm={openQualificationConfirm} round2Unlocked={round2Unlocked} />}
+          {section === "round2"      && <AdminRound2 qualified={qualified} unlocked={round2Unlocked} onUnlockRequest={() => setConfirmUnlockOpen(true)} teams={adminTeams} />}
+          {section === "chat"        && <AdminChat teams={adminTeams} chatTeam={chatTeam} setChatTeam={setChatTeam} activeChatTeam={activeChatTeam} />}
           {section === "leaderboard" && <AdminLeaderboard teams={adminTeams} qualified={qualified} unlocked={round2Unlocked} />}
-          {section === "logs" && <AdminLogs />}
-          {section === "results" && <AdminResults teams={adminTeams} qualified={qualified} unlocked={round2Unlocked} />}
+          {section === "logs"        && <AdminLogs logs={adminLogs} />}
+          {section === "results"     && <AdminResults teams={adminTeams} qualified={qualified} unlocked={round2Unlocked} />}
 
+          {/* Event control panel */}
           <section className="admin-control-panel" id="event-control">
             <div><div className="section-kicker">EVENT CONTROL</div><h2>Event control</h2></div>
             <div className="control-grid">
-              <ControlValue label="EVENT STATUS" value="LIVE" />
-              <ControlValue label="CURRENT ROUND" value="ROUND 1" />
-              <ControlValue label="EVENT TIMER" value={formatTimer(remaining)} />
+              <ControlValue label="EVENT STATUS"   value="LIVE" />
+              <ControlValue label="CURRENT ROUND"  value={round2Unlocked ? "ROUND 2" : "ROUND 1"} />
+              <ControlValue label="EVENT TIMER"    value={formatTimer(remaining)} />
               <ControlValue label="ROUND 1 STATUS" value="COMPLETED" />
               <ControlValue label="ROUND 2 STATUS" value={round2Unlocked ? "UNLOCKED" : "LOCKED"} danger={!round2Unlocked} />
-              <ControlValue label="AI BOT STATUS" value={round2Unlocked ? "READY" : "LOCKED"} danger={!round2Unlocked} />
+              <ControlValue label="AI BOT STATUS"  value={round2Unlocked ? "READY" : "LOCKED"} danger={!round2Unlocked} />
             </div>
             <div className="control-actions">
               <button className="admin-btn secondary" onClick={() => setSection("round1")}>Manage Qualification</button>
-              <button className="admin-btn primary" disabled={!qualified.length || round2Unlocked} onClick={() => setConfirmOpen(true)}>Unlock Round 2</button>
+              <button
+                className="admin-btn primary"
+                disabled={!qualified.length || round2Unlocked}
+                onClick={() => setConfirmUnlockOpen(true)}
+              >
+                Unlock Round 2
+              </button>
             </div>
           </section>
         </div>
       </section>
 
-      {confirmOpen && (
-        <div className="admin-modal-backdrop">
+      {/* ── Confirmation modal: Unlock Round 2 ── */}
+      {confirmUnlockOpen && (
+        <div className="admin-modal-backdrop" role="dialog" aria-modal="true">
           <div className="admin-modal">
             <div className="section-kicker">CONFIRM ACTION</div>
             <h2>Unlock Round 2?</h2>
-            <p>This will give Round 2 access only to the {qualified.length} explicitly qualified team{qualified.length > 1 ? "s" : ""}. Teams not selected will remain locked out.</p>
-            <div className="modal-actions"><button className="admin-btn secondary" onClick={() => setConfirmOpen(false)}>Cancel</button><button className="admin-btn primary" onClick={unlockRound2}>Unlock Round 2</button></div>
+            <p>
+              Are you sure you want to unlock Round 2 for the{" "}
+              {qualified.length} explicitly qualified team{qualified.length > 1 ? "s" : ""}?
+              Teams not selected will remain locked out.
+            </p>
+            <div className="modal-actions">
+              <button className="admin-btn secondary" onClick={() => setConfirmUnlockOpen(false)}>Cancel</button>
+              <button className="admin-btn primary" onClick={unlockRound2}>Unlock Round 2</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Confirmation modal: Qualify Teams ── */}
+      {confirmQualOpen && (
+        <div className="admin-modal-backdrop" role="dialog" aria-modal="true">
+          <div className="admin-modal">
+            <div className="section-kicker">CONFIRM QUALIFICATION</div>
+            <h2>Qualify Selected Teams?</h2>
+            <p>
+              Are you sure you want to qualify the {selected.length} selected
+              team{selected.length > 1 ? "s" : ""} for Round 2?
+              Round 2 will remain <strong>LOCKED</strong> until you explicitly unlock it.
+            </p>
+            <div className="modal-actions">
+              <button className="admin-btn secondary" onClick={() => setConfirmQualOpen(false)}>Cancel</button>
+              <button className="admin-btn primary" onClick={confirmQualification}>Confirm Qualification</button>
+            </div>
           </div>
         </div>
       )}
@@ -525,79 +927,451 @@ function AdminPage() {
   );
 }
 
+/* ─── Shared admin UI atoms ─────────────────────────────────────────────── */
 function ControlValue({ label, value, danger }) {
-  return <div className="control-value"><span>{label}</span><strong className={danger ? "danger-text" : ""}>{value}</strong></div>;
+  return (
+    <div className="control-value">
+      <span>{label}</span>
+      <strong className={danger ? "danger-text" : ""}>{value}</strong>
+    </div>
+  );
 }
 
 function SectionTitle({ kicker, title, action }) {
-  return <div className="admin-section-title"><div><div className="section-kicker">{kicker}</div><h2>{title}</h2></div>{action}</div>;
+  return (
+    <div className="admin-section-title">
+      <div><div className="section-kicker">{kicker}</div><h2>{title}</h2></div>
+      {action}
+    </div>
+  );
 }
 
+/* ─── Dashboard — Event Timing and Round 2 Qualification panels removed ─── */
 function AdminDashboard({ formatTimer, remaining, activeTeams, completedCount, qualifiedCount, round2Active, round2Unlocked, setSection }) {
   return <>
-    <section className="admin-hero"><div><div className="section-kicker">DASHBOARD</div><h2>Event overview</h2><p>Live control view for team progress, round qualification, and event timing.</p></div><div className="hero-timer"><span>EVENT TIMER</span><strong>{formatTimer(remaining)}</strong><small>Server timer ready · demo countdown</small></div></section>
+    <section className="admin-hero">
+      <div>
+        <div className="section-kicker">DASHBOARD</div>
+        <h2>Event overview</h2>
+        <p>Live control view for team progress, round status, and event management.</p>
+      </div>
+      <div className="hero-timer">
+        <span>EVENT TIMER</span>
+        <strong>{formatTimer(remaining)}</strong>
+        <small>Server timer ready · demo countdown</small>
+      </div>
+    </section>
+
     <div className="stat-grid">
-      <AdminStat label="TOTAL TEAMS" value="8" /><AdminStat label="ACTIVE TEAMS" value={activeTeams} /><AdminStat label="ROUND 1 COMPLETED" value={completedCount} /><AdminStat label="ROUND 2 QUALIFIED" value={qualifiedCount} /><AdminStat label="ROUND 2 ACTIVE" value={round2Active} />
+      <AdminStat label="TOTAL TEAMS"       value="8" />
+      <AdminStat label="ACTIVE TEAMS"      value={activeTeams} />
+      <AdminStat label="ROUND 1 COMPLETED" value={completedCount} />
+      <AdminStat label="ROUND 2 QUALIFIED" value={qualifiedCount} />
+      <AdminStat label="ROUND 2 ACTIVE"    value={round2Active} />
     </div>
-    <TimingPanel />
-    <section className="admin-panel"><SectionTitle kicker="ROUND 2 QUALIFICATION" title="Select qualified teams" action={<button className="text-link" onClick={() => setSection("round1")}>Open qualification →</button>} /><p className="panel-note">Round 2 is <strong>LOCKED</strong> until qualification is confirmed and the admin explicitly unlocks it.</p><div className={round2Unlocked ? "status-strip unlocked" : "status-strip"}><span>ROUND 2</span><strong>{round2Unlocked ? "UNLOCKED" : "LOCKED"}</strong></div></section>
+
+    <section className="admin-panel">
+      <SectionTitle
+        kicker="ROUND 2 STATUS"
+        title="Round 2 access control"
+        action={<button className="text-link" onClick={() => setSection("round1")}>Manage qualification →</button>}
+      />
+      <p className="panel-note">
+        Round 2 is <strong>LOCKED</strong> until qualification is confirmed and the admin explicitly unlocks it.
+        {qualifiedCount > 0 && ` ${qualifiedCount} team${qualifiedCount > 1 ? "s" : ""} currently qualified.`}
+      </p>
+      <div className={round2Unlocked ? "status-strip unlocked" : "status-strip"}>
+        <span>ROUND 2</span>
+        <strong>{round2Unlocked ? "UNLOCKED" : "LOCKED"}</strong>
+      </div>
+    </section>
   </>;
 }
 
-function AdminStat({ label, value }) { return <div className="admin-stat"><span>{label}</span><strong>{value}</strong></div>; }
-
-function TimingPanel() {
-  const cards = [
-    ["EVENT", "09:00:00", "12:00:00", "03:00:00", "01:24:36", "LIVE"],
-    ["ROUND 1", "09:10:00", "10:30:00", "01:20:00", "00:00:00", "COMPLETED"],
-    ["ROUND 2", "10:45:00", "12:00:00", "01:15:00", "01:15:00", "LOCKED"]
-  ];
-  return <section className="admin-panel"><SectionTitle kicker="TIMING SYSTEM" title="Event timing" /><div className="timing-grid">{cards.map((c) => <div className="timing-card" key={c[0]}><div className="timing-card-head"><strong>{c[0]}</strong><span className={c[5] === "LOCKED" ? "danger-badge" : "ok-badge"}>{c[5]}</span></div><div className="timing-fields"><ControlValue label="START TIME" value={c[1]} /><ControlValue label="END TIME" value={c[2]} /><ControlValue label="DURATION" value={c[3]} /><ControlValue label="TIME REMAINING" value={c[4]} /></div></div>)}</div><p className="server-note">Timing is structured for a server-controlled source of truth. The countdown shown here is demo state until a backend timer is connected.</p></section>;
+function AdminStat({ label, value }) {
+  return (
+    <div className="admin-stat">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
 }
 
+/* ─── Teams — shows only name and email, no credentials ────────────────── */
 function AdminTeams() {
-  return <section className="admin-panel"><SectionTitle kicker="TEAM MANAGEMENT" title="Registered teams" /><div className="table-wrap"><table className="admin-table simple"><thead><tr><th>TEAM NAME</th><th>EMAIL</th></tr></thead><tbody>{adminTeams.map((team) => <tr key={team.id}><td>{team.name}</td><td className="email-cell">{team.email}</td></tr>)}</tbody></table></div></section>;
+  return (
+    <section className="admin-panel">
+      <SectionTitle kicker="TEAM MANAGEMENT" title="Registered teams" />
+      <div className="table-wrap">
+        <table className="admin-table simple">
+          <thead>
+            <tr><th>TEAM NAME</th><th>EMAIL</th></tr>
+          </thead>
+          <tbody>
+            {adminTeams.map((team) => (
+              <tr key={team.id}>
+                <td>{team.name}</td>
+                <td className="email-cell">{team.email}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
 }
 
-function AdminRound1({ completedTeams, selected, toggleEligible, qualified, confirmQualification }) {
+/* ─── Round 1 — qualification requires explicit confirmation modal ───────── */
+function AdminRound1({ completedTeams, selected, toggleEligible, qualified, openQualificationConfirm, round2Unlocked }) {
   return <>
-    <section className="admin-panel"><SectionTitle kicker="ROUND 1" title="Round 1 monitoring" /><div className="round-summary"><ControlValue label="ROUND 1 STATUS" value="COMPLETED" /><ControlValue label="ROUND 1 TIMER" value="00:00:00" /><ControlValue label="TOTAL TEAMS" value="8" /><ControlValue label="SUBMISSIONS" value="32" /><ControlValue label="COMPLETED" value={`${completedTeams.length} / 8`} /><ControlValue label="QUALIFIED" value={`${qualified.length} / ${completedTeams.length}`} /></div><div className="table-wrap"><table className="admin-table"><thead><tr><th>TEAM</th><th>PROGRESS</th><th>SUBMISSIONS</th><th>TIME REMAINING</th></tr></thead><tbody>{adminTeams.map((team) => <tr key={team.id}><td>{team.name}</td><td><span className={team.completed ? "table-ok" : ""}>{team.progress}</span></td><td>{team.submissions}</td><td>{team.completed ? "00:00:00" : "00:21:14"}</td></tr>)}</tbody></table></div></section>
-    <section className="admin-panel"><SectionTitle kicker="ROUND 2 QUALIFICATION" title="Select completed teams" /><p className="panel-note">Only teams with a completed Round 1 can be selected. Selection alone does not unlock Round 2.</p><div className="table-wrap"><table className="admin-table qualification"><thead><tr><th>TEAM NAME</th><th>ROUND 1 STATUS</th><th>SELECT</th></tr></thead><tbody>{adminTeams.map((team) => <tr key={team.id}><td>{team.name}</td><td>{team.completed ? <span className="table-ok">COMPLETED</span> : <span className="muted-cell">INCOMPLETE</span>}</td><td><button className={selected.includes(team.id) ? "check selected" : "check"} disabled={!team.completed || qualified.includes(team.id)} onClick={() => toggleEligible(team.id)} aria-label={`Select ${team.name}`}>{selected.includes(team.id) ? "✓" : ""}</button></td></tr>)}</tbody></table></div><div className="qualification-footer"><span>{qualified.length ? `${qualified.length} team${qualified.length > 1 ? "s" : ""} already qualified` : `${selected.length} selected`}</span><button className="admin-btn primary" disabled={!selected.length} onClick={confirmQualification}>Confirm Qualified Teams</button></div></section>
+    <section className="admin-panel">
+      <SectionTitle kicker="ROUND 1" title="Round 1 monitoring" />
+      <div className="round-summary">
+        <ControlValue label="ROUND 1 STATUS"  value="COMPLETED" />
+        <ControlValue label="ROUND 1 TIMER"   value="00:00:00" />
+        <ControlValue label="TOTAL TEAMS"     value="8" />
+        <ControlValue label="SUBMISSIONS"     value={adminTeams.reduce((s, t) => s + t.r1Challenges, 0)} />
+        <ControlValue label="COMPLETED"       value={`${completedTeams.length} / 8`} />
+        <ControlValue label="QUALIFIED"       value={`${qualified.length} / ${completedTeams.length}`} />
+      </div>
+      <div className="table-wrap">
+        <table className="admin-table">
+          <thead>
+            <tr><th>TEAM</th><th>PROGRESS</th><th>CHALLENGES</th><th>COMPLETION TIME</th></tr>
+          </thead>
+          <tbody>
+            {adminTeams.map((team) => (
+              <tr key={team.id}>
+                <td>{team.name}</td>
+                <td>
+                  <span className={team.completed ? "table-ok" : ""}>
+                    {team.r1Challenges} / 6
+                  </span>
+                </td>
+                <td>{team.r1Challenges}</td>
+                <td>{team.completed ? team.time : "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section className="admin-panel">
+      <SectionTitle kicker="ROUND 2 QUALIFICATION" title="Select completed teams" />
+      <p className="panel-note">
+        Only teams that completed Round 1 can be selected. Selection alone does{" "}
+        <strong>not</strong> unlock Round 2 — the admin must explicitly unlock it.
+      </p>
+      <div className="table-wrap">
+        <table className="admin-table qualification">
+          <thead>
+            <tr><th>TEAM NAME</th><th>ROUND 1 STATUS</th><th>SELECT</th></tr>
+          </thead>
+          <tbody>
+            {adminTeams.map((team) => (
+              <tr key={team.id}>
+                <td>{team.name}</td>
+                <td>
+                  {team.completed
+                    ? <span className="table-ok">COMPLETED</span>
+                    : <span className="muted-cell">INCOMPLETE</span>}
+                </td>
+                <td>
+                  <button
+                    className={selected.includes(team.id) ? "check selected" : "check"}
+                    disabled={!team.completed || qualified.includes(team.id) || round2Unlocked}
+                    onClick={() => toggleEligible(team.id)}
+                    aria-label={`Select ${team.name}`}
+                  >
+                    {selected.includes(team.id) || qualified.includes(team.id) ? "✓" : ""}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="qualification-footer">
+        <span>
+          {qualified.length
+            ? `${qualified.length} team${qualified.length > 1 ? "s" : ""} already qualified`
+            : `${selected.length} selected`}
+        </span>
+        <button
+          className="admin-btn primary"
+          disabled={!selected.length || round2Unlocked}
+          onClick={openQualificationConfirm}
+        >
+          Confirm Qualified Teams
+        </button>
+      </div>
+    </section>
   </>;
 }
 
-function AdminRound2({ qualified, unlocked, unlockRound2, teams }) {
-  const qualifiedTeams = teams.filter((team) => qualified.includes(team.id));
+/* ─── Round 2 ────────────────────────────────────────────────────────────── */
+function AdminRound2({ qualified, unlocked, onUnlockRequest, teams }) {
+  const qualifiedTeams = teams.filter((t) => qualified.includes(t.id));
   return <>
-    <section className="admin-panel round2-panel"><div className="round2-heading"><div><div className="section-kicker">ROUND 2</div><h2>Round 2 monitoring</h2></div><div className={unlocked ? "round-state unlocked" : "round-state locked"}><span>ROUND 2</span><strong>{unlocked ? "UNLOCKED" : "LOCKED"}</strong></div></div><div className="round2-summary"><ControlValue label="ROUND 2 STATUS" value={unlocked ? "UNLOCKED" : "LOCKED"} danger={!unlocked} /><ControlValue label="ROUND 2 TIMER" value={unlocked ? "01:14:32" : "—"} /><ControlValue label="QUALIFIED TEAMS" value={`${round2Unlocked ? qualified.length : 0} / ${qualified.length}`} /><ControlValue label="ACTIVE TEAMS" value={unlocked ? Math.min(qualified.length, 3) : 0} /><ControlValue label="AI BOT STATUS" value={unlocked ? "READY" : "LOCKED"} danger={!unlocked} /><ControlValue label="TOTAL ATTEMPTS" value={unlocked ? "17" : "0"} /><ControlValue label="CHALLENGES COMPLETED" value={unlocked ? "9" : "0"} /></div>{!unlocked && <div className="locked-message"><strong>ROUND 2 LOCKED</strong><span>Complete qualification, then explicitly unlock the round. No team receives automatic access.</span><button className="admin-btn primary" disabled={!qualified.length} onClick={unlockRound2}>Unlock for Qualified Teams</button></div>}</section>
-    <section className="admin-panel"><SectionTitle kicker="AI BOT CHALLENGE" title="Round 2 team progress" /><div className="table-wrap"><table className="admin-table"><thead><tr><th>TEAM</th><th>SCORE</th><th>ATTEMPTS</th><th>PROGRESS</th><th>TIME REMAINING</th></tr></thead><tbody>{qualifiedTeams.length ? qualifiedTeams.map((team) => <tr key={team.id}><td>{team.name}</td><td>{unlocked ? team.r1 + 14 : "—"}</td><td>{unlocked ? 5 : 0}</td><td>{unlocked ? "3 / 5" : "LOCKED"}</td><td>{unlocked ? "00:42:18" : "—"}</td></tr>) : <tr><td colSpan="5" className="empty-cell">No qualified teams yet.</td></tr>}</tbody></table></div></section>
+    <section className="admin-panel round2-panel">
+      <div className="round2-heading">
+        <div><div className="section-kicker">ROUND 2</div><h2>Round 2 monitoring</h2></div>
+        <div className={unlocked ? "round-state unlocked" : "round-state locked"}>
+          <span>ROUND 2</span>
+          <strong>{unlocked ? "UNLOCKED" : "LOCKED"}</strong>
+        </div>
+      </div>
+      <div className="round2-summary">
+        <ControlValue label="ROUND 2 STATUS"       value={unlocked ? "UNLOCKED" : "LOCKED"} danger={!unlocked} />
+        <ControlValue label="ROUND 2 TIMER"        value={unlocked ? "01:14:32" : "—"} />
+        <ControlValue label="QUALIFIED TEAMS"      value={`${unlocked ? qualified.length : 0} / ${qualified.length}`} />
+        <ControlValue label="ACTIVE TEAMS"         value={unlocked ? Math.min(qualified.length, 3) : 0} />
+        <ControlValue label="AI BOT STATUS"        value={unlocked ? "READY" : "LOCKED"} danger={!unlocked} />
+        <ControlValue label="TOTAL ATTEMPTS"       value={unlocked ? "17" : "0"} />
+        <ControlValue label="CHALLENGES COMPLETED" value={unlocked ? "9" : "0"} />
+      </div>
+      {!unlocked && (
+        <div className="locked-message">
+          <strong>ROUND 2 LOCKED</strong>
+          <span>Complete qualification, then explicitly unlock the round. No team receives automatic access.</span>
+          <button
+            className="admin-btn primary"
+            disabled={!qualified.length}
+            onClick={onUnlockRequest}
+          >
+            Unlock for Qualified Teams
+          </button>
+        </div>
+      )}
+    </section>
+
+    <section className="admin-panel">
+      <SectionTitle kicker="AI BOT CHALLENGE" title="Round 2 team progress" />
+      <div className="table-wrap">
+        <table className="admin-table">
+          <thead>
+            <tr><th>TEAM</th><th>CHALLENGES</th><th>ATTEMPTS</th><th>PROGRESS</th><th>TIME REMAINING</th></tr>
+          </thead>
+          <tbody>
+            {qualifiedTeams.length ? qualifiedTeams.map((team) => (
+              <tr key={team.id}>
+                <td>{team.name}</td>
+                <td>{unlocked ? `${team.r2Challenges} / 6` : "—"}</td>
+                <td>{unlocked ? 5 : 0}</td>
+                <td>{unlocked ? "3 / 5" : <span className="muted-cell">LOCKED</span>}</td>
+                <td>{unlocked ? "00:42:18" : "—"}</td>
+              </tr>
+            )) : (
+              <tr><td colSpan="5" className="empty-cell">No qualified teams yet.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
   </>;
 }
 
+/* ─── Team Chat — 6 challenge tabs at top ───────────────────────────────── */
 function AdminChat({ teams, chatTeam, setChatTeam, activeChatTeam }) {
-  return <section className="admin-panel chat-monitor"><SectionTitle kicker="ADMIN-ONLY TEAM CHAT" title="Team Chat" /><div className="chat-admin-layout"><div className="chat-team-list">{teams.map((team) => <button key={team.id} className={chatTeam === team.id ? "chat-team active" : "chat-team"} onClick={() => setChatTeam(team.id)}>{team.name}<span>{team.email}</span></button>)}</div><div className="admin-chat-window"><div className="admin-chat-head"><div><strong>{activeChatTeam.name}</strong><span>Internal event chat</span></div><span className="admin-only-badge">ADMIN ACCESS</span></div><div className="admin-messages"><div className="admin-message"><span>10:42:18 · {activeChatTeam.name}</span><p>Challenge 06 submitted.</p></div><div className="admin-message control"><span>10:42:21 · CHALLENGE CONTROL</span><p>Submission received. Challenge completed.</p></div></div><div className="admin-chat-note">Admin-only monitoring view. Chat data is intentionally kept separate from the main Teams table.</div></div></div></section>;
+  const [activeChallenge, setActiveChallenge] = useState(0);
+  const conv = challengeChatMessages[activeChallenge];
+  const teamName = activeChatTeam.name;
+
+  return (
+    <section className="admin-panel chat-monitor">
+      <SectionTitle kicker="ADMIN-ONLY TEAM CHAT" title="Team Chat" />
+
+      {/* Challenge tabs — one per challenge (01–06) */}
+      <div className="challenge-tabs-row">
+        {challenges.map((_, i) => (
+          <button
+            key={i}
+            className={activeChallenge === i ? "challenge-tab active" : "challenge-tab"}
+            onClick={() => setActiveChallenge(i)}
+          >
+            Challenge {String(i + 1).padStart(2, "0")}
+          </button>
+        ))}
+      </div>
+
+      <div className="chat-admin-layout">
+        {/* Team list */}
+        <div className="chat-team-list">
+          {teams.map((team) => (
+            <button
+              key={team.id}
+              className={chatTeam === team.id ? "chat-team active" : "chat-team"}
+              onClick={() => setChatTeam(team.id)}
+            >
+              {team.name}
+              <span>{team.email}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Chat window for selected team + challenge */}
+        <div className="admin-chat-window">
+          <div className="admin-chat-head">
+            <div>
+              <strong>{teamName}</strong>
+              <span>Challenge {String(activeChallenge + 1).padStart(2, "0")} conversation</span>
+            </div>
+            <span className="admin-only-badge">ADMIN ACCESS</span>
+          </div>
+          <div className="admin-messages">
+            <div className="admin-message">
+              <span>{conv.team.replace("{name}", teamName)}</span>
+              <p>{conv.msg}</p>
+            </div>
+            <div className="admin-message control">
+              <span>{conv.ctrl}</span>
+              <p>{conv.reply}</p>
+            </div>
+          </div>
+          <div className="admin-chat-note">
+            Admin-only monitoring view. Each tab shows a separate challenge conversation.
+            Chat data is intentionally kept separate from the main Teams table.
+          </div>
+        </div>
+      </div>
+    </section>
+  );
 }
 
+/* ─── Leaderboard ───────────────────────────────────────────────────────── */
 function AdminLeaderboard({ teams, qualified, unlocked }) {
-  const rows = [...teams].sort((a, b) => b.total - a.total || a.time.localeCompare(b.time));
-  return <section className="admin-panel"><SectionTitle kicker="LEADERBOARD" title="Live leaderboard" /><div className="table-wrap"><table className="admin-table"><thead><tr><th>RANK</th><th>TEAM</th><th>ROUND 1</th><th>ROUND 2</th><th>TOTAL</th><th>COMPLETION TIME</th></tr></thead><tbody>{rows.map((team, i) => <tr key={team.id}><td>#{i + 1}</td><td>{team.name}</td><td>{team.r1 || "—"}</td><td>{unlocked && qualified.includes(team.id) ? 14 : "—"}</td><td>{team.r1 || "—"}</td><td>{team.time}</td></tr>)}</tbody></table></div><p className="panel-note">Round 2 scores appear only for explicitly qualified teams after Round 2 is unlocked.</p></section>;
+  const rows = [...teams].sort((a, b) => {
+    const aTotal = a.r1Challenges + (unlocked && qualified.includes(a.id) ? a.r2Challenges : 0);
+    const bTotal = b.r1Challenges + (unlocked && qualified.includes(b.id) ? b.r2Challenges : 0);
+    return bTotal - aTotal || a.time.localeCompare(b.time);
+  });
+
+  return (
+    <section className="admin-panel">
+      <SectionTitle kicker="LEADERBOARD" title="Live leaderboard" />
+      <div className="table-wrap">
+        <table className="admin-table">
+          <thead>
+            <tr>
+              <th>RANK</th>
+              <th>TEAM</th>
+              <th>ROUND 1</th>
+              <th>ROUND 2</th>
+              <th>TOTAL</th>
+              <th>COMPLETION TIME</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((team, i) => {
+              const r2 = unlocked && qualified.includes(team.id) ? team.r2Challenges : null;
+              const total = team.r1Challenges + (r2 !== null ? r2 : 0);
+              return (
+                <tr key={team.id}>
+                  <td>#{i + 1}</td>
+                  <td>{team.name}</td>
+                  <td>{team.r1Challenges} / 6</td>
+                  <td>{r2 !== null ? `${r2} / 6` : "—"}</td>
+                  <td>{total}</td>
+                  <td>{team.time}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <p className="panel-note">
+        Round 2 progress appears only for explicitly qualified teams after Round 2 is unlocked.
+      </p>
+    </section>
+  );
 }
 
-function AdminLogs() {
-  const logs = [
-    ["10:42:18", "CYBER TITANS", "ROUND 1", "CHALLENGE SUBMITTED", "SUCCESS"],
-    ["10:55:02", "ADMIN", "ROUND 2", "TEAM QUALIFIED", "CYBER TITANS"],
-    ["11:00:00", "ADMIN", "ROUND 2", "ROUND UNLOCKED", "SUCCESS"],
-    ["11:04:27", "ZERO DAY", "ROUND 2", "AI BOT ATTEMPT", "RECORDED"],
-    ["11:08:16", "PROMPT X", "ROUND 1", "CHALLENGE SUBMITTED", "SUCCESS"]
-  ];
-  return <section className="admin-panel"><SectionTitle kicker="ACTIVITY LOGS" title="Event activity" /><div className="log-list"><div className="log-row log-head"><span>TIMESTAMP</span><span>TEAM</span><span>ROUND</span><span>ACTION</span><span>RESULT</span></div>{logs.map((log, i) => <div className="log-row" key={i}>{log.map((item, j) => <span key={j} className={j === 4 ? "log-result" : ""}>{item}</span>)}</div>)}</div></section>;
+/* ─── Activity Logs — 5 columns, no passwords logged ────────────────────── */
+function AdminLogs({ logs }) {
+  return (
+    <section className="admin-panel">
+      <SectionTitle kicker="ACTIVITY LOGS" title="Event activity" />
+      <div className="log-list">
+        <div className="log-row log-head">
+          <span>TEAM</span>
+          <span>ROUND 1 TIME</span>
+          <span>ROUND 2 TIME</span>
+          <span>ACTION</span>
+          <span>CHALLENGES COMPLETED</span>
+        </div>
+        {logs.map((log, i) => (
+          <div className="log-row" key={i}>
+            <span>{log.team}</span>
+            <span>{log.r1Time}</span>
+            <span>{log.r2Time}</span>
+            <span className="log-action">{log.action}</span>
+            <span className="log-result">{log.challenges}</span>
+          </div>
+        ))}
+        {logs.length === 0 && (
+          <div className="log-row">
+            <span colSpan="5" style={{ gridColumn: "1/-1", color: "#5f5f67", textAlign: "center" }}>
+              No activity logged yet.
+            </span>
+          </div>
+        )}
+      </div>
+    </section>
+  );
 }
 
+/* ─── Results — Challenges Completed columns (not raw scores) ───────────── */
 function AdminResults({ teams, qualified, unlocked }) {
-  return <section className="admin-panel"><SectionTitle kicker="FINAL RESULTS" title="Results" /><div className="table-wrap"><table className="admin-table"><thead><tr><th>RANK</th><th>TEAM</th><th>ROUND 1 SCORE</th><th>ROUND 2 SCORE</th><th>TOTAL SCORE</th><th>FINAL STATUS</th></tr></thead><tbody>{teams.slice(0, 6).map((team, i) => <tr key={team.id}><td>{i + 1}</td><td>{team.name}</td><td>{team.r1 || "—"}</td><td>{unlocked && qualified.includes(team.id) ? 14 : "—"}</td><td>{team.r1 || "—"}</td><td>{unlocked && qualified.includes(team.id) ? "QUALIFIED" : team.completed ? "ROUND 1 COMPLETE" : "IN PROGRESS"}</td></tr>)}</tbody></table></div></section>;
+  const rows = [...teams].sort((a, b) => {
+    const aTotal = a.r1Challenges + (unlocked && qualified.includes(a.id) ? a.r2Challenges : 0);
+    const bTotal = b.r1Challenges + (unlocked && qualified.includes(b.id) ? b.r2Challenges : 0);
+    return bTotal - aTotal || a.time.localeCompare(b.time);
+  });
+
+  return (
+    <section className="admin-panel">
+      <SectionTitle kicker="FINAL RESULTS" title="Results" />
+      <div className="table-wrap">
+        <table className="admin-table">
+          <thead>
+            <tr>
+              <th>RANK</th>
+              <th>TEAM</th>
+              <th>CHALLENGES COMPLETED IN ROUND 1</th>
+              <th>CHALLENGES COMPLETED IN ROUND 2</th>
+              <th>TOTAL</th>
+              <th>FINAL STATUS</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((team, i) => {
+              const r2Done  = unlocked && qualified.includes(team.id) ? team.r2Challenges : null;
+              const total   = team.r1Challenges + (r2Done !== null ? r2Done : 0);
+              const status  =
+                unlocked && qualified.includes(team.id) ? <span className="table-ok">QUALIFIED</span> :
+                team.completed ? "ROUND 1 COMPLETE" :
+                <span className="muted-cell">IN PROGRESS</span>;
+
+              return (
+                <tr key={team.id}>
+                  <td>#{i + 1}</td>
+                  <td>{team.name}</td>
+                  <td>{team.r1Challenges} / 6</td>
+                  <td>{r2Done !== null ? `${r2Done} / 6` : "—"}</td>
+                  <td>{total}</td>
+                  <td>{status}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
 }
 
+/* ─── Rules alert (participant-facing) ───────────────────────────────────── */
 function alertRules() {
   window.alert(
 `RULES
@@ -613,9 +1387,17 @@ function alertRules() {
   );
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   ROOT — routes between participant app and admin auth gate
+   /admin  → AdminAuthGate (shows login screen until authenticated)
+   /       → App (participant flow — completely separate)
+═══════════════════════════════════════════════════════════════════════════ */
 function Root() {
-  const isAdmin = window.location.pathname === "/admin" || window.location.pathname === "/admin/";
-  return isAdmin ? <AdminPage /> : <App />;
+  const isAdmin =
+    window.location.pathname === "/admin" ||
+    window.location.pathname === "/admin/";
+  // Admin Control Center is completely isolated from participant navigation.
+  return isAdmin ? <AdminAuthGate /> : <App />;
 }
 
 createRoot(document.getElementById("root")).render(<Root />);
