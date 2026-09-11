@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import "./styles.css";
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -47,8 +48,8 @@ function validatePassword(pw) {
    PARTICIPANT APP
 ═══════════════════════════════════════════════════════════════════════════ */
 function App() {
-  const [page, setPage]                   = useState("auth");
-  const [authMode, setAuthMode]           = useState("register");
+  const [participantAuthenticated, setParticipantAuthenticated] = useState(false);
+  const [authMode, setAuthMode]           = useState("login");
   const [team, setTeam]                   = useState("");
   const [email, setEmail]                 = useState("");
   const [password, setPassword]           = useState("");
@@ -61,9 +62,11 @@ function App() {
   const [mobileNav, setMobileNav]         = useState(false);
   const [error, setError]                 = useState("");
 
-  // Login brute-force protection
   const [loginAttempts, setLoginAttempts]         = useState(0);
   const [loginLockoutUntil, setLoginLockoutUntil] = useState(null);
+
+  const [adminAuthenticated, setAdminAuthenticated] = useState(false);
+  const navigate = useNavigate();
 
   const progress = completed.length;
 
@@ -73,16 +76,18 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (page === "challenge") {
+    if (participantAuthenticated && messages.length === 0) {
       setMessages([
         {
           id: "control-0",
           side: "control",
-          text: `Challenge ${String(active + 1).padStart(2, "0")} is now active.\\n\\n${challenges[active]}`
+          text: `Challenge ${String(active + 1).padStart(2, "0")} is now active.
+
+${challenges[active]}`
         }
       ]);
     }
-  }, [active, page]);
+  }, [active, participantAuthenticated]);
 
   const currentDone = completed.includes(active);
   const allDone     = completed.length === 6;
@@ -97,7 +102,6 @@ function App() {
       setError("Enter a valid email address.");
       return;
     }
-    // Password strength check on registration
     const pwCheck = validatePassword(password);
     if (!pwCheck.valid) {
       setError("Password is too weak. Please follow the requirements shown below.");
@@ -108,12 +112,11 @@ function App() {
     setStoredAccount(account);
     setAuthMode("login");
     setPassword("");
-    setError("Account created. Login to start the challenge.");
+    setError("Registration successful. Please login.");
   }
 
   function login() {
     setError("");
-    // Lockout check
     if (loginLockoutUntil && Date.now() < loginLockoutUntil) {
       setError("Too many failed attempts. Please wait for the countdown to finish.");
       return;
@@ -135,23 +138,19 @@ function App() {
       }
       return;
     }
-    // Success — reset counters
     setLoginAttempts(0);
     setLoginLockoutUntil(null);
-    setPage("challenge");
+    setParticipantAuthenticated(true);
     setCompleted([]);
     setActive(0);
     setInput("");
+    navigate("/round-1");
   }
 
   function submitPrompt() {
     const value = input.trim();
     if (!value || loading || currentDone) return;
-
-    setMessages((m) => [
-      ...m,
-      { id: Date.now(), side: "user", text: value }
-    ]);
+    setMessages((m) => [...m, { id: Date.now(), side: "user", text: value }]);
     setInput("");
     setLoading(true);
 
@@ -159,16 +158,7 @@ function App() {
       const nextCompleted = [...new Set([...completed, active])].sort((a, b) => a - b);
       setCompleted(nextCompleted);
       setLoading(false);
-
-      setMessages((m) => [
-        ...m,
-        {
-          id: Date.now() + 1,
-          side: "control",
-          text: "Submission received. Challenge completed. Good work."
-        }
-      ]);
-
+      setMessages((m) => [...m, { id: Date.now() + 1, side: "control", text: "Submission received. Challenge completed. Good work." }]);
       if (active < 5) {
         setTimeout(() => setActive(active + 1), 650);
       }
@@ -176,7 +166,7 @@ function App() {
   }
 
   function logout() {
-    setPage("auth");
+    setParticipantAuthenticated(false);
     setAuthMode("login");
     setPassword("");
     setInput("");
@@ -184,6 +174,7 @@ function App() {
     setActive(0);
     setMessages([]);
     setMobileNav(false);
+    navigate("/login");
   }
 
   function jumpToChallenge(index) {
@@ -194,45 +185,188 @@ function App() {
 
   return (
     <div className="app">
-      {page === "auth" ? (
-        <AuthPage
-          mode={authMode}
-          setMode={(m) => { setAuthMode(m); setError(""); setPassword(""); }}
-          team={team}
-          email={email}
-          password={password}
-          setTeam={setTeam}
-          setEmail={setEmail}
-          setPassword={setPassword}
-          register={register}
-          login={login}
-          error={error}
-          hasAccount={!!storedAccount}
-          loginAttempts={loginAttempts}
-          loginLockoutUntil={loginLockoutUntil}
-        />
-      ) : (
-        <ChallengePage
-          team={storedAccount?.team || "Team"}
-          progress={progress}
-          completed={completed}
-          active={active}
-          messages={messages}
-          input={input}
-          setInput={setInput}
-          loading={loading}
-          currentDone={currentDone}
-          allDone={allDone}
-          mobileNav={mobileNav}
-          setMobileNav={setMobileNav}
-          jumpToChallenge={jumpToChallenge}
-          submitPrompt={submitPrompt}
-          logout={logout}
-        />
-      )}
+      <Routes>
+        <Route path="/" element={<Navigate to="/login" replace />} />
+        <Route path="/login" element={
+          <ParticipantAuthPage
+            mode={authMode} setMode={(m) => { setAuthMode(m); setError(""); setPassword(""); }}
+            team={team} email={email} password={password}
+            setTeam={setTeam} setEmail={setEmail} setPassword={setPassword}
+            register={register} login={login} error={error} hasAccount={!!storedAccount}
+            loginAttempts={loginAttempts} loginLockoutUntil={loginLockoutUntil}
+          />
+        } />
+        <Route path="/round-1" element={
+          participantAuthenticated ? (
+            <ChallengePage
+              team={storedAccount?.team || "Team"} progress={progress} completed={completed}
+              active={active} messages={messages} input={input} setInput={setInput}
+              loading={loading} currentDone={currentDone} allDone={allDone}
+              mobileNav={mobileNav} setMobileNav={setMobileNav}
+              jumpToChallenge={jumpToChallenge} submitPrompt={submitPrompt} logout={logout}
+              onProceed={() => navigate("/round-2")}
+            />
+          ) : <Navigate to="/login" replace />
+        } />
+        <Route path="/round-2" element={
+          participantAuthenticated ? (
+            <Round2 participantTeam={storedAccount?.team || "Team"} logout={logout} mobileNav={mobileNav} setMobileNav={setMobileNav} />
+          ) : <Navigate to="/login" replace />
+        } />
+        <Route path="/admin/login" element={
+          <AdminLoginPage setAdminAuthenticated={setAdminAuthenticated} />
+        } />
+        <Route path="/admin/*" element={
+          adminAuthenticated ? <AdminPage /> : <Navigate to="/admin/login" replace />
+        } />
+      </Routes>
     </div>
   );
 }
+
+function LandingPage() {
+  const navigate = useNavigate();
+  return (
+    <main className="auth-page">
+      <section className="intro-panel" style={{ flex: "1 1 100%" }}>
+        <div className="intro-inner" style={{ maxWidth: "800px", margin: "0 auto", textAlign: "center" }}>
+          <div className="intro-copy">
+            <div className="eyebrow">EVENT NAME</div>
+            <h1>PROMPT HEIST</h1>
+            <p className="lead">Think Different. Prompt Smarter.</p>
+            <div className="overview" style={{ textAlign: "left" }}>
+              <h2>Event Overview</h2>
+              <ul className="overview-points">
+                {overview.map((point, i) => <li key={i}>{point}</li>)}
+              </ul>
+              <p className="motto">Think. Prompt. Break. Advance.</p>
+            </div>
+            <div style={{ marginTop: "2rem", display: "flex", gap: "1rem", justifyContent: "center" }}>
+              <button className="primary-btn" onClick={() => navigate("/login", { state: { mode: "login" } })}>Login</button>
+              <button className="admin-btn secondary" onClick={() => navigate("/login", { state: { mode: "register" } })}>Register</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function AdminLoginPage({ setAdminAuthenticated }) {
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPw, setShowPw] = useState(false);
+  const [error, setError] = useState("");
+  const navigate = useNavigate();
+
+  function handleLogin(e) {
+    e.preventDefault();
+    if (username === "admin" && password === "Admin@123") {
+      setAdminAuthenticated(true);
+      navigate("/admin");
+    } else {
+      setError("Invalid admin credentials. (Hint: admin / Admin@123)");
+    }
+  }
+
+  const pwAnalysis = password ? validatePassword(password) : null;
+
+  return (
+    <main className="auth-page">
+      <section className="auth-panel" style={{ flex: "1 1 100%", display: "flex", justifyContent: "center" }}>
+        <div className="auth-box">
+          <div className="auth-heading">
+            <div className="eyebrow">ADMIN SECURE ACCESS</div>
+            <h2>Admin Login</h2>
+            <p>Enter your administrator credentials to access the dashboard.</p>
+          </div>
+          <form onSubmit={handleLogin}>
+            <label>
+              Admin Username
+              <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Enter username" />
+            </label>
+            <label>
+              Admin Password
+              <div className="pw-field-wrap">
+                <input type={showPw ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Enter admin password" />
+                <button type="button" className="pw-eye-btn" onClick={() => setShowPw(v => !v)}>
+                  {showPw ? (
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+                        <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+                        <line x1="1" y1="1" x2="23" y2="23"/>
+                      </svg>
+                    ) : (
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                        <circle cx="12" cy="12" r="3"/>
+                      </svg>
+                    )}
+                </button>
+              </div>
+              {password && pwAnalysis && (
+                <div className="pw-strength-wrap">
+                  <div className="pw-strength-bar">
+                    <div className={`pw-strength-fill strength-${pwAnalysis.strength}`} style={{ width: `${(pwAnalysis.passed / 4) * 100}%` }} />
+                  </div>
+                  <span className={`pw-strength-label strength-${pwAnalysis.strength}`}>
+                    {pwAnalysis.strength === "weak" ? "Weak" : pwAnalysis.strength === "medium" ? "Medium" : "Strong"}
+                  </span>
+                </div>
+              )}
+            </label>
+            <button className="primary-btn" type="submit">Access Dashboard <span>→</span></button>
+          </form>
+          {error && <div className="form-message">{error}</div>}
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function Round2({ participantTeam, logout, mobileNav, setMobileNav }) {
+  const isUnlocked = false; 
+
+  return (
+    <main className="challenge-page">
+      {mobileNav && <div className="mobile-backdrop" onClick={() => setMobileNav(false)} />}
+      <aside className={mobileNav ? "sidebar open" : "sidebar"}>
+        <div className="sidebar-top">
+          <Brand compact />
+          <div className="progress-title">Round 2 Progress</div>
+        </div>
+        <nav className="challenge-nav">
+          <button className="challenge-item selected unavailable" disabled>
+            <span>Operation Nova</span>
+            <small>Locked</small>
+          </button>
+        </nav>
+        <div className="sidebar-bottom">
+          <button onClick={logout}>Logout</button>
+        </div>
+      </aside>
+      <section className="chat-area">
+        <header className="chat-header">
+          <div>
+            <div className="eyebrow">AI JAILBREAK 2026</div>
+            <h1>Round 2: Operation Nova</h1>
+          </div>
+          <div className="team-chip">{participantTeam}</div>
+        </header>
+        <div className="chat-content" style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%" }}>
+          {!isUnlocked && (
+             <div className="locked-message" style={{ textAlign: "center", padding: "2rem", border: "1px solid #333", borderRadius: "8px", background: "#111" }}>
+               <h2 style={{ color: "#ff4444", marginBottom: "1rem" }}>ROUND 2 LOCKED</h2>
+               <p style={{ color: "#aaa" }}>Round 2 has not been unlocked yet or your team has not qualified.</p>
+               <p style={{ color: "#888", fontSize: "0.9rem", marginTop: "1rem" }}>Please wait for the Event Control administrator to grant access.</p>
+             </div>
+          )}
+        </div>
+      </section>
+    </main>
+  );
+}
+
 
 function Brand({ compact = false }) {
   return (
@@ -249,7 +383,7 @@ function Brand({ compact = false }) {
 /* ═══════════════════════════════════════════════════════════════════════════
    AUTH PAGE — with password strength, eye toggle, brute-force protection
 ═══════════════════════════════════════════════════════════════════════════ */
-function AuthPage({
+function ParticipantAuthPage({
   mode, setMode, team, email, password, setTeam, setEmail, setPassword,
   register, login, error, hasAccount, loginAttempts, loginLockoutUntil
 }) {
@@ -257,6 +391,14 @@ function AuthPage({
   const [showLoginPw, setShowLoginPw] = useState(false);
   const [lockSecsLeft, setLockSecsLeft] = useState(0);
 
+  const location = useLocation();
+  useEffect(() => {
+    if (location.state?.mode) {
+      setMode(location.state.mode);
+      // clean up state to prevent stuck mode on refresh
+      window.history.replaceState({}, '');
+    }
+  }, [location.state, setMode]);
   const pwAnalysis = password ? validatePassword(password) : null;
 
   // Live countdown for login lockout
@@ -477,7 +619,7 @@ function AuthPage({
 
 function ChallengePage({
   team, progress, completed, active, messages, input, setInput, loading,
-  currentDone, allDone, mobileNav, setMobileNav, jumpToChallenge, submitPrompt, logout
+  currentDone, allDone, mobileNav, setMobileNav, jumpToChallenge, submitPrompt, logout, onProceed
 }) {
   return (
     <main className="challenge-page">
@@ -581,7 +723,7 @@ function ChallengePage({
               <div className="composer-note">Text-based interaction only</div>
             </>
           ) : (
-            <Completion progress={progress} onHome={logout} />
+            <Completion progress={progress} onProceed={onProceed} />
           )}
         </div>
       </section>
@@ -589,7 +731,7 @@ function ChallengePage({
   );
 }
 
-function Completion({ progress, onHome }) {
+function Completion({ progress, onProceed }) {
   return (
     <div className="completion">
       <div className="completion-line" />
@@ -597,7 +739,7 @@ function Completion({ progress, onHome }) {
       <h2>HEIST COMPLETED</h2>
       <p>You successfully cracked all prompts.</p>
       <div className="completion-count">{progress} / 6 <span>Challenges Completed</span></div>
-      <button className="primary-btn small" onClick={onHome}>Return Home <span>→</span></button>
+      <button className="primary-btn small" onClick={onProceed}>Proceed to Round 2 <span>→</span></button>
     </div>
   );
 }
@@ -1250,13 +1392,10 @@ function alertRules() {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   ROOT — routes /admin to dashboard directly, / to participant app
+   ROOT
 ═══════════════════════════════════════════════════════════════════════════ */
-function Root() {
-  const isAdmin =
-    window.location.pathname === "/admin" ||
-    window.location.pathname === "/admin/";
-  return isAdmin ? <AdminPage /> : <App />;
-}
-
-createRoot(document.getElementById("root")).render(<Root />);
+createRoot(document.getElementById("root")).render(
+  <BrowserRouter>
+    <App />
+  </BrowserRouter>
+);
