@@ -1,4 +1,4 @@
-﻿import React from "react";
+import React from "react";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    SHARED DATA
@@ -145,29 +145,51 @@ export default function Round1Page({
                 )}
               </div>
 
-              <div className="composer-wrap">
-                <textarea
-                  value={input}
-                  disabled={loading || currentDone}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      submitPrompt();
-                    }
-                  }}
-                  placeholder="Enter your prompt..."
-                  rows="3"
-                />
-                <button
-                  className="send-btn"
-                  onClick={submitPrompt}
-                  disabled={!input.trim() || loading || currentDone}
-                >
-                  Send <span>up</span>
-                </button>
-              </div>
-              <div className="composer-note">Text-based interaction only</div>
+              {currentDone && !allDone ? (
+                <div style={{ display: "flex", justifyContent: "center", padding: "20px 0", width: "100%" }}>
+                  <button
+                    className="primary-btn"
+                    style={{ 
+                      backgroundColor: "#ff2a2a", 
+                      color: "white", 
+                      borderColor: "#ff2a2a", 
+                      width: "auto", 
+                      minWidth: "200px",
+                      padding: "12px 24px",
+                      fontSize: "14px" 
+                    }}
+                    onClick={() => jumpToChallenge(active + 1)}
+                  >
+                    Next Challenge ➔
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div className="composer-wrap">
+                    <textarea
+                      value={input}
+                      disabled={loading || currentDone}
+                      onChange={(e) => setInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          submitPrompt();
+                        }
+                      }}
+                      placeholder="Enter your prompt..."
+                      rows="3"
+                    />
+                    <button
+                      className="send-btn"
+                      onClick={submitPrompt}
+                      disabled={!input.trim() || loading || currentDone}
+                    >
+                      Send <span>up</span>
+                    </button>
+                  </div>
+                  <div className="composer-note">Text-based interaction only</div>
+                </>
+              )}
             </>
           ) : (
             <Completion progress={progress} onProceed={onProceed} />

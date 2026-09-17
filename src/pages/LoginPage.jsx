@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -19,16 +19,11 @@ export const overview = [
 ═══════════════════════════════════════════════════════════════════════════ */
 export function validatePassword(pw) {
   const rules = [
-    { label: "At least 8 characters", ok: pw.length >= 8 },
-    { label: "One uppercase letter (A-Z)", ok: /[A-Z]/.test(pw) },
-    { label: "One lowercase letter (a-z)", ok: /[a-z]/.test(pw) },
-    { label: "One number (0-9)", ok: /[0-9]/.test(pw) }
+    { label: "Must be exactly 4 characters", ok: pw.length === 4 }
   ];
   const passed = rules.filter((r) => r.ok).length;
-  const valid = passed === 4;
-  let strength = "weak";
-  if (passed >= 2 && pw.length >= 5) strength = "medium";
-  if (valid) strength = "strong";
+  const valid = passed === 1;
+  let strength = valid ? "strong" : "weak";
   return { valid, strength, rules, passed };
 }
 

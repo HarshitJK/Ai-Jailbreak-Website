@@ -1,0 +1,59 @@
+#party-container {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    overflow: hidden;
+    z-index: 999999;
+}
+
+.ph-confetti {
+    position: absolute;
+    top: -30px;
+    width: 8px;
+    height: 14px;
+    border-radius: 2px;
+    opacity: 1;
+    will-change: transform, opacity;
+    animation: ph-confetti-fall linear forwards;
+}
+
+@keyframes ph-confetti-fall {
+    0% { transform: translate3d(0, -30px, 0) rotate(0deg); opacity: 1; }
+    25% { opacity: 1; }
+    70% { opacity: 1; }
+    100% { transform: translate3d(var(--ph-drift), 110vh, 0) rotate(var(--ph-rotation)); opacity: 0; }
+}
+
+.ph-burst {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    pointer-events: none;
+    animation: ph-burst-animation 1.2s cubic-bezier(.15,.8,.3,1) forwards;
+}
+
+@keyframes ph-burst-animation {
+    0% { transform: translate(-50%, -50%) scale(0); opacity: 1; }
+    100% { transform: translate(calc(-50% + var(--ph-x)), calc(-50% + var(--ph-y))) scale(.2); opacity: 0; }
+}
+
+#ph-success-flash {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 999998;
+    background: radial-gradient(circle at center, rgba(0,255,157,.20), transparent 45%);
+    opacity: 0;
+    animation: ph-success-flash 900ms ease-out forwards;
+}
+
+@keyframes ph-success-flash {
+    0% { opacity: 0; }
+    20% { opacity: 1; }
+    100% { opacity: 0; }
+}

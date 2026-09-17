@@ -1,7 +1,9 @@
-﻿import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams, Link } from "react-router-dom";
 import "./styles.css";
+import "./party.css";
+import { launchPartyEffect } from "./party.js";
 
 import LoginPage, { validatePassword, overview } from "./pages/LoginPage";
 import Round1Page, { challenges, Brand } from "./pages/Round1Page";
@@ -94,9 +96,10 @@ function App() {
   function register() {
     setError("");
     if (!team.trim() || !email.trim() || !password.trim()) { setError("Please complete all three fields."); return; }
+    if (team.trim().length !== 4) { setError("Team name must be exactly 4 characters."); return; }
     if (!email.includes("@")) { setError("Enter a valid email address."); return; }
     const pwCheck = validatePassword(password);
-    if (!pwCheck.valid) { setError("Password is too weak. Please follow the requirements shown below."); return; }
+    if (!pwCheck.valid) { setError("Password must be exactly 4 characters."); return; }
     const account = { team: team.trim(), email: email.trim(), password };
     localStorage.setItem("prompt-heist-account", JSON.stringify(account));
     setStoredAccount(account);
@@ -141,8 +144,11 @@ function App() {
       const nextCompleted = [...new Set([...completed, active])].sort((a, b) => a - b);
       setCompleted(nextCompleted);
       setLoading(false);
+      
+      // Trigger Party Effect
+      launchPartyEffect();
+
       setMessages((m) => [...m, { id: Date.now() + 1, side: "control", text: "Submission received. Challenge completed. Good work." }]);
-      if (active < 5) setTimeout(() => setActive(active + 1), 650);
     }, 900);
   }
 
