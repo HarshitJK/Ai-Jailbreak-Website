@@ -8,6 +8,7 @@ import { launchPartyEffect } from "./party.js";
 import LoginPage, { validatePassword, overview } from "./pages/LoginPage";
 import Round1Page, { challenges, Brand } from "./pages/Round1Page";
 import AdminPage, { AdminLoginPage } from "./pages/AdminPage";
+import Round2page from "./pages/Round2page";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    ROUND 2 PAGE (placeholder — kept in main for now)
@@ -197,7 +198,7 @@ function App() {
         } />
         <Route path="/round-2" element={
           participantAuthenticated ? (
-            <Round2 participantTeam={storedAccount?.team || "Team"} logout={logout} mobileNav={mobileNav} setMobileNav={setMobileNav} />
+            <Round2page />
           ) : <Navigate to="/login" replace />
         } />
         <Route path="/admin/login" element={<AdminLoginPage setAdminAuthenticated={setAdminAuthenticated} />} />
