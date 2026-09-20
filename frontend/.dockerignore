@@ -1,0 +1,24 @@
+# Node dependencies (installed fresh in the builder stage)
+node_modules/
+
+# Build output (produced inside Docker, not needed from host)
+dist/
+
+# Environment files (never leak real credentials into the image)
+.env
+.env.local
+.env.*.local
+
+# Git
+.git/
+.gitignore
+
+# IDE / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Logs
+*.log
+npm-debug.log*

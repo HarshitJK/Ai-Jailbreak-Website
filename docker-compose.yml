@@ -1,0 +1,65 @@
+version: "3.9"
+
+services:
+  # ── MongoDB ──────────────────────────────────────────────────────────────────
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+    # No host port exposure by default — only reachable by other services.
+    # Uncomment below if you need direct access from the host (e.g. Compass):
+    # ports:
+    #   - "27017:27017"
+    networks:
+      - app_net
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ── Backend (FastAPI) ─────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    environment:
+      # Override MONGO_URI to point at the compose service name (not localhost)
+      MONGO_URI: mongodb://mongo:27017
+      MONGO_DB_NAME: ai_jailbreak
+      # Allow requests from the nginx frontend container (same compose network)
+      FRONTEND_ORIGIN: http://localhost:3000
+    ports:
+      - "4000:4000"
+    depends_on:
+      mongo:
+        condition: service_healthy
+    networks:
+      - app_net
+
+  # ── Frontend (Vite build → nginx) ─────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - app_net
+
+# ── Named volumes ─────────────────────────────────────────────────────────────
+volumes:
+  mongo_data:
+
+# ── Network ───────────────────────────────────────────────────────────────────
+networks:
+  app_net:
+    driver: bridge
