@@ -93,7 +93,7 @@ function App() {
   }, [active, participantAuthenticated]);
 
   const currentDone = completed.includes(active);
-  const allDone     = completed.length === 6;
+  const allDone     = completed.length === 5;
 
   function register() {
     setError("");
@@ -163,7 +163,7 @@ function App() {
         launchPartyEffect();
 
         // Auto-advance to next stage if available
-        if (nextStage !== null && nextStage <= 5) {
+        if (nextStage !== null && nextStage <= 4) {
           setTimeout(() => jumpToChallenge(nextStage), 600);
         }
       }
