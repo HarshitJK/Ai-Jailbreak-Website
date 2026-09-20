@@ -87,7 +87,7 @@ function App() {
       setMessages([{
         id: "control-0",
         side: "control",
-        text: `Challenge ${String(active + 1).padStart(2, "0")} is now active.\n\n${challenges[active]}`
+        text: `Challenge ${String(active + 1).padStart(2, "0")}: ${challenges[active].title}\n\n${challenges[active].goal}`
       }]);
     }
   }, [active, participantAuthenticated]);
