@@ -6,6 +6,7 @@ import "./party.css";
 import { launchPartyEffect } from "./party.js";
 
 import LoginPage, { validatePassword, overview } from "./pages/LoginPage";
+import { sendChatMessage } from "./lib/apiClient";
 import Round1Page, { challenges, Brand } from "./pages/Round1Page";
 import AdminPage, { AdminLoginPage } from "./pages/AdminPage";
 import Round2page from "./pages/Round2page";
@@ -135,22 +136,46 @@ function App() {
     navigate("/round-1");
   }
 
-  function submitPrompt() {
+  async function submitPrompt() {
     const value = input.trim();
     if (!value || loading || currentDone) return;
-    setMessages((m) => [...m, { id: Date.now(), side: "user", text: value }]);
+
+    const userMsg = { id: Date.now(), side: "user", text: value };
+    setMessages((m) => [...m, userMsg]);
     setInput("");
     setLoading(true);
-    setTimeout(() => {
-      const nextCompleted = [...new Set([...completed, active])].sort((a, b) => a - b);
-      setCompleted(nextCompleted);
-      setLoading(false);
-      
-      // Trigger Party Effect
-      launchPartyEffect();
 
-      setMessages((m) => [...m, { id: Date.now() + 1, side: "control", text: "Submission received. Challenge completed. Good work." }]);
-    }, 900);
+    try {
+      const teamId = storedAccount?.team ?? "unknown";
+      const { reply, stageComplete, nextStage } = await sendChatMessage({
+        team_id: teamId,
+        stage: active,   // 0-indexed — backend translates to 1-indexed
+        message: value,
+      });
+
+      setMessages((m) => [...m, { id: Date.now() + 1, side: "control", text: reply }]);
+
+      if (stageComplete) {
+        const nextCompleted = [...new Set([...completed, active])].sort((a, b) => a - b);
+        setCompleted(nextCompleted);
+
+        // Trigger Party Effect
+        launchPartyEffect();
+
+        // Auto-advance to next stage if available
+        if (nextStage !== null && nextStage <= 5) {
+          setTimeout(() => jumpToChallenge(nextStage), 600);
+        }
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error — is the backend running?";
+      setMessages((m) => [
+        ...m,
+        { id: Date.now() + 2, side: "control", text: `[Error] ${msg}` },
+      ]);
+    } finally {
+      setLoading(false);
+    }
   }
 
   function logout() {
