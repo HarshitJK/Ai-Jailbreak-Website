@@ -6,7 +6,7 @@ import "./party.css";
 import { launchPartyEffect } from "./party.js";
 
 import LoginPage, { validatePassword, overview } from "./pages/LoginPage";
-import { sendChatMessage } from "./lib/apiClient";
+import { sendChatMessage, registerTeam, loginTeam } from "./lib/apiClient";
 import Round1Page, { challenges, Brand } from "./pages/Round1Page";
 import AdminPage, { AdminLoginPage } from "./pages/AdminPage";
 import Round2page from "./pages/Round2page";
@@ -78,7 +78,10 @@ function App() {
   const progress = completed.length;
 
   useEffect(() => {
-    const saved = localStorage.getItem("prompt-heist-account");
+    // Support both old localStorage key (pre-backend-auth) and new key
+    const saved =
+      localStorage.getItem("prompt-heist-auth") ??
+      localStorage.getItem("prompt-heist-account");
     if (saved) setStoredAccount(JSON.parse(saved));
   }, []);
 
@@ -95,27 +98,49 @@ function App() {
   const currentDone = completed.includes(active);
   const allDone     = completed.length === 5;
 
-  function register() {
+  async function register() {
     setError("");
     if (!team.trim() || !email.trim() || !password.trim()) { setError("Please complete all three fields."); return; }
     if (team.trim().length !== 4) { setError("Team name must be exactly 4 characters."); return; }
     if (!email.includes("@")) { setError("Enter a valid email address."); return; }
     const pwCheck = validatePassword(password);
     if (!pwCheck.valid) { setError("Password must be exactly 4 characters."); return; }
-    const account = { team: team.trim(), email: email.trim(), password };
-    localStorage.setItem("prompt-heist-account", JSON.stringify(account));
-    setStoredAccount(account);
-    setAuthMode("login");
-    setPassword("");
-    setError("Registration successful. Please login.");
+    try {
+      setLoading(true);
+      const auth = await registerTeam({ team_name: team.trim(), email: email.trim(), password });
+      const account = { team: auth.team_name, email: email.trim(), session_token: auth.session_token };
+      localStorage.setItem("prompt-heist-auth", JSON.stringify(account));
+      setStoredAccount(account);
+      setAuthMode("login");
+      setPassword("");
+      setError("Registration successful. Please login.");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Registration failed.";
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
   }
 
-  function login() {
+  async function login() {
     setError("");
     if (loginLockoutUntil && Date.now() < loginLockoutUntil) { setError("Too many failed attempts. Please wait for the countdown to finish."); return; }
-    const account = storedAccount;
-    if (!account) { setError("No account found. Create an account first."); return; }
-    if (team.trim() !== account.team || password !== account.password) {
+    if (!team.trim() || !password) { setError("Please enter your team name and password."); return; }
+    try {
+      setLoading(true);
+      const auth = await loginTeam({ team_name: team.trim(), password });
+      const account = { team: auth.team_name, session_token: auth.session_token };
+      localStorage.setItem("prompt-heist-auth", JSON.stringify(account));
+      setStoredAccount(account);
+      setLoginAttempts(0);
+      setLoginLockoutUntil(null);
+      setParticipantAuthenticated(true);
+      setCompleted([]);
+      setActive(0);
+      setInput("");
+      navigate("/round-1");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Login failed.";
       const next = loginAttempts + 1;
       setLoginAttempts(next);
       if (next >= 5) {
@@ -123,17 +148,11 @@ function App() {
         setError("Too many failed attempts. Login disabled for 60 seconds.");
       } else {
         const left = 5 - next;
-        setError(`Team name or password is incorrect. ${left} attempt${left !== 1 ? "s" : ""} remaining.`);
+        setError(`${msg} ${left} attempt${left !== 1 ? "s" : ""} remaining.`);
       }
-      return;
+    } finally {
+      setLoading(false);
     }
-    setLoginAttempts(0);
-    setLoginLockoutUntil(null);
-    setParticipantAuthenticated(true);
-    setCompleted([]);
-    setActive(0);
-    setInput("");
-    navigate("/round-1");
   }
 
   async function submitPrompt() {
@@ -146,7 +165,7 @@ function App() {
     setLoading(true);
 
     try {
-      const teamId = storedAccount?.team ?? "unknown";
+      const teamId = storedAccount?.team ?? "unknown";  // team_name string — unchanged API contract
       const { reply, stageComplete, nextStage } = await sendChatMessage({
         team_id: teamId,
         stage: active,   // 0-indexed — backend translates to 1-indexed
@@ -187,6 +206,10 @@ function App() {
     setActive(0);
     setMessages([]);
     setMobileNav(false);
+    setStoredAccount(null);
+    // Clear both old and new localStorage keys
+    localStorage.removeItem("prompt-heist-auth");
+    localStorage.removeItem("prompt-heist-account");
     navigate("/login");
   }
 
