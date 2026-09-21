@@ -514,4 +514,76 @@ input:focus, textarea:focus { border-color: rgba(220,38,38,.6); background: #131
   .challenge-tab { padding: 6px 9px; font-size: 9px; }
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   ADMIN LOADING / EMPTY / ERROR STATES
+   Shown in place of data while fetches are in flight or return nothing.
+═══════════════════════════════════════════════════════════════════════════ */
+.admin-loading-state,
+.admin-error-state,
+.admin-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  min-height: 240px;
+  text-align: center;
+  padding: 40px 24px;
+}
+.admin-loading-state p,
+.admin-empty-state p {
+  color: #66666e;
+  font-size: 13px;
+}
+.admin-error-state h2,
+.admin-empty-state h2 {
+  font: 700 18px "Space Grotesk";
+  color: #e0e0e8;
+  margin: 0;
+}
+.admin-error-state p {
+  color: #a1a1aa;
+  font-size: 13px;
+  max-width: 420px;
+}
 
+/* Spinner */
+.admin-spinner {
+  width: 32px;
+  height: 32px;
+  border: 2px solid rgba(255,255,255,.08);
+  border-top-color: #ef4444;
+  border-radius: 50%;
+  animation: admin-spin 0.75s linear infinite;
+}
+@keyframes admin-spin { to { transform: rotate(360deg); } }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TRANSCRIPT VIEWER — chat_logs grouped by round/stage
+═══════════════════════════════════════════════════════════════════════════ */
+.transcript-group {
+  margin-bottom: 18px;
+}
+.transcript-group-header {
+  font: 600 9px "Space Grotesk";
+  letter-spacing: .12em;
+  color: #ef4444;
+  text-transform: uppercase;
+  padding: 8px 0 6px;
+  border-bottom: 1px solid rgba(239,68,68,.18);
+  margin-bottom: 8px;
+}
+.admin-transcript-loading,
+.admin-transcript-error,
+.admin-transcript-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 40px 20px;
+  color: #66666e;
+  font-size: 13px;
+  text-align: center;
+}
+.admin-transcript-error p { color: #f87171; }

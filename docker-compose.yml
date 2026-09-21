@@ -8,8 +8,8 @@ services:
       - mongo_data:/data/db
     # No host port exposure by default — only reachable by other services.
     # Uncomment below if you need direct access from the host (e.g. Compass):
-    # ports:
-    #   - "27017:27017"
+    ports:
+      - "27017:27017"
     networks:
       - app_net
     healthcheck:

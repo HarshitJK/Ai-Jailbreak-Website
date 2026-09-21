@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 
 from app.routers import chat, health
 from app.routers import auth
+from app.routers import admin
 from app.db import get_motor_client, close_motor_client
 
 load_dotenv()  # take environment variables from .env.
@@ -34,13 +35,14 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[os.getenv("FRONTEND_ORIGIN", "http://localhost:5173")],
     allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization"],
+    allow_headers=["Content-Type", "Authorization", "X-Admin-Secret"],
 )
 
 # Mount routers
 app.include_router(health.router)
 app.include_router(auth.router)
 app.include_router(chat.router)
+app.include_router(admin.router)
 
 if __name__ == "__main__":
     import uvicorn

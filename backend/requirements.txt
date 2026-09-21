@@ -3,6 +3,7 @@ uvicorn[standard]
 pydantic
 python-dotenv
 anthropic
+groq
 motor
 bcrypt
-python-multipart
+python-multipart

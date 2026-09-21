@@ -1,34 +1,33 @@
-import React, { useEffect, useState } from "react";
+/**
+ * AdminPage.jsx
+ *
+ * All static/mock data has been removed. Every team and transcript entry now
+ * comes from the backend via fetchAdminTeams() and fetchTeamLogs() in apiClient.ts.
+ *
+ * What was removed vs what now supplies the data:
+ *   • adminTeams (8 fake teams)          → GET /api/admin/teams
+ *   • initialAdminLogs (4 fake log rows) → Logs tab replaced by transcript viewer
+ *   • challengeChatMessages (fake chat)  → GET /api/admin/teams/{id}/logs
+ *   • Hardcoded "TOTAL TEAMS: 8"         → teams.length from live fetch
+ *   • Hardcoded "ACTIVE TEAMS: 6"        → derived from fetch (round1_stage > 0)
+ *   • Hardcoded "COMPLETED: 4/8"         → derived from fetch (round1_complete_at != null)
+ *   • Hardcoded Round 1 Status "COMPLETED" → derived dynamically
+ *   • import { challenges } from Round1Page → removed (was only used for fake chat tabs)
+ *
+ * Fields the UI previously showed that have NO Mongo equivalent (flagged here):
+ *   • elapsed time ("00:38:42")      — schema has round1_complete_at (datetime), not a duration.
+ *                                      We display the formatted datetime instead.
+ *   • r1Challenges / r2Challenges    — no such field. round1_stage (0-5) is displayed as "X/5".
+ *   • event activity log (r1Time, action, challenges cols) — no event-log collection.
+ *                                      Logs tab is replaced by a per-team transcript viewer
+ *                                      backed by chat_logs.
+ */
+
+import React, { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { fetchAdminTeams, fetchTeamLogs } from "../lib/apiClient";
 
-import { challenges } from "./Round1Page";
-
-const adminTeams = [
-  { id: 1, name: "Cyber Titans", email: "cyber@example.com", r1Challenges: 6, r2Challenges: 0, time: "00:38:42", completed: true },
-  { id: 2, name: "Zero Day", email: "zero@example.com", r1Challenges: 6, r2Challenges: 0, time: "00:41:18", completed: true },
-  { id: 3, name: "Prompt X", email: "promptx@example.com", r1Challenges: 6, r2Challenges: 0, time: "00:44:09", completed: true },
-  { id: 4, name: "Root Access", email: "root@example.com", r1Challenges: 6, r2Challenges: 0, time: "00:49:27", completed: true },
-  { id: 5, name: "Byte Force", email: "byte@example.com", r1Challenges: 4, r2Challenges: 0, time: "-", completed: false },
-  { id: 6, name: "Null Pointer", email: "null@example.com", r1Challenges: 3, r2Challenges: 0, time: "-", completed: false },
-  { id: 7, name: "Code Breakers", email: "code@example.com", r1Challenges: 2, r2Challenges: 0, time: "-", completed: false },
-  { id: 8, name: "Shadow Stack", email: "shadow@example.com", r1Challenges: 1, r2Challenges: 0, time: "-", completed: false }
-];
-
-const initialAdminLogs = [
-  { ts: "10:38:42", team: "Cyber Titans", r1Time: "00:38:42", r2Time: "-", action: "Round 1 completed", challenges: "R1: 6/6, R2: -" },
-  { ts: "10:41:18", team: "Zero Day", r1Time: "00:41:18", r2Time: "-", action: "Round 1 completed", challenges: "R1: 6/6, R2: -" },
-  { ts: "10:44:09", team: "Prompt X", r1Time: "00:44:09", r2Time: "-", action: "Round 1 completed", challenges: "R1: 6/6, R2: -" },
-  { ts: "10:49:27", team: "Root Access", r1Time: "00:49:27", r2Time: "-", action: "Round 1 completed", challenges: "R1: 6/6, R2: -" }
-];
-
-const challengeChatMessages = [
-  { team: "10:31:04 - {name}", ctrl: "10:31:08 - CHALLENGE CONTROL", msg: "Challenge 01 submitted.", reply: "Challenge 01 completed." },
-  { team: "10:35:22 - {name}", ctrl: "10:35:27 - CHALLENGE CONTROL", msg: "Challenge 02 submitted.", reply: "Challenge 02 completed." },
-  { team: "10:39:11 - {name}", ctrl: "10:39:14 - CHALLENGE CONTROL", msg: "Challenge 03 submitted.", reply: "Challenge 03 completed." },
-  { team: "10:42:55 - {name}", ctrl: "10:42:58 - CHALLENGE CONTROL", msg: "Challenge 04 submitted.", reply: "Challenge 04 completed." },
-  { team: "10:46:33 - {name}", ctrl: "10:46:37 - CHALLENGE CONTROL", msg: "Challenge 05 submitted.", reply: "Challenge 05 completed." },
-  { team: "10:49:01 - {name}", ctrl: "10:49:05 - CHALLENGE CONTROL", msg: "Challenge 06 submitted.", reply: "Challenge 06 completed. Heist complete." }
-];
+// ── Small shared UI atoms ─────────────────────────────────────────────────────
 
 function ControlValue({ label, value, danger }) {
   return (
@@ -52,6 +51,58 @@ function AdminStat({ label, value }) {
   return <div className="admin-stat"><span>{label}</span><strong>{value}</strong></div>;
 }
 
+/** Spinner shown while fetching data from the backend. */
+function LoadingState() {
+  return (
+    <div className="admin-loading-state">
+      <div className="admin-spinner" aria-label="Loading" />
+      <p>Loading live data…</p>
+    </div>
+  );
+}
+
+/** Shown when the fetch fails (e.g. wrong secret, backend down). */
+function ErrorState({ message, onRetry }) {
+  return (
+    <div className="admin-error-state">
+      <div className="section-kicker">FETCH ERROR</div>
+      <h2>Could not load data</h2>
+      <p>{message}</p>
+      <button className="admin-btn secondary" onClick={onRetry}>Retry</button>
+    </div>
+  );
+}
+
+/** Shown when the teams collection is genuinely empty. */
+function EmptyTeamsState() {
+  return (
+    <div className="admin-empty-state">
+      <div className="section-kicker">NO DATA</div>
+      <h2>No teams registered yet</h2>
+      <p>This view will populate once teams begin registering for the event.</p>
+    </div>
+  );
+}
+
+// ── Helper: format an ISO timestamp for display ───────────────────────────────
+// NOTE: The schema stores round1_complete_at as a UTC datetime, not an elapsed
+// duration. We display it as a human-readable time in the admin's local timezone.
+function fmtTimestamp(iso) {
+  if (!iso) return "—";
+  try {
+    return new Date(iso).toLocaleTimeString("en-GB", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      timeZoneName: "short",
+    });
+  } catch {
+    return iso;
+  }
+}
+
+// ── Admin login page (frontend gatekeeper — unchanged from original) ───────────
+
 export function AdminLoginPage({ setAdminAuthenticated }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -64,10 +115,10 @@ export function AdminLoginPage({ setAdminAuthenticated }) {
     if (username === "admin" && password === "Admin@123") {
       setAdminAuthenticated(true);
       navigate("/admin");
+    } else {
+      setError("Invalid admin credentials.");
     }
   }
-
-
 
   return (
     <main className="auth-page">
@@ -99,7 +150,6 @@ export function AdminLoginPage({ setAdminAuthenticated }) {
                   )}
                 </button>
               </div>
-
             </label>
             <button className="primary-btn" type="submit">Access Dashboard</button>
           </form>
@@ -110,7 +160,15 @@ export function AdminLoginPage({ setAdminAuthenticated }) {
   );
 }
 
-function AdminDashboard({ formatTimer, remaining, activeTeams, completedCount }) {
+// ── Sub-components (all receive real `teams` from the parent fetch) ────────────
+
+function AdminDashboard({ formatTimer, remaining, teams }) {
+  const totalTeams = teams.length;
+  // "active" = teams that have sent at least one message (round1_stage > 0)
+  const activeTeams = teams.filter((t) => t.round1_stage > 0).length;
+  // "completed" = teams that finished all Round 1 stages
+  const completedCount = teams.filter((t) => t.round1_complete_at != null).length;
+
   return (
     <>
       <section className="admin-hero">
@@ -122,11 +180,11 @@ function AdminDashboard({ formatTimer, remaining, activeTeams, completedCount })
         <div className="hero-timer">
           <span>EVENT TIMER</span>
           <strong>{formatTimer(remaining)}</strong>
-          <small>Server timer ready - demo countdown</small>
+          <small>Local countdown — does not sync to server</small>
         </div>
       </section>
       <div className="stat-grid">
-        <AdminStat label="TOTAL TEAMS" value="8" />
+        <AdminStat label="TOTAL TEAMS" value={totalTeams} />
         <AdminStat label="ACTIVE TEAMS" value={activeTeams} />
         <AdminStat label="ROUND 1 COMPLETED" value={completedCount} />
       </div>
@@ -134,72 +192,110 @@ function AdminDashboard({ formatTimer, remaining, activeTeams, completedCount })
   );
 }
 
-function AdminTeams() {
+function AdminTeams({ teams }) {
+  if (teams.length === 0) return <EmptyTeamsState />;
   return (
     <section className="admin-panel">
       <SectionTitle kicker="TEAM MANAGEMENT" title="Registered teams" />
       <div className="table-wrap">
         <table className="admin-table simple">
           <thead><tr><th>TEAM NAME</th><th>EMAIL</th></tr></thead>
-          <tbody>{adminTeams.map((team) => <tr key={team.id}><td>{team.name}</td><td className="email-cell">{team.email}</td></tr>)}</tbody>
+          <tbody>
+            {teams.map((team) => (
+              <tr key={team.team_name}>
+                <td>{team.team_name}</td>
+                <td className="email-cell">{team.email}</td>
+              </tr>
+            ))}
+          </tbody>
         </table>
       </div>
     </section>
   );
 }
 
-function AdminRound1({ completedTeams, selected, toggleEligible, qualified, openQualificationConfirm, round2Unlocked }) {
+function AdminRound1({ teams, selected, toggleEligible, qualified, openQualificationConfirm, round2Unlocked }) {
+  const totalTeams = teams.length;
+  // Completed = round1_complete_at is set (all 5 stages done)
+  const completedTeams = teams.filter((t) => t.round1_complete_at != null);
+
+  // Derive a stable "id" from team_name for selection logic
   return (
     <>
       <section className="admin-panel">
         <SectionTitle kicker="ROUND 1" title="Round 1 monitoring" />
         <div className="round-summary">
-          <ControlValue label="ROUND 1 STATUS" value="COMPLETED" />
-          <ControlValue label="TOTAL TEAMS" value="8" />
-          <ControlValue label="COMPLETED" value={`${completedTeams.length} / 8`} />
+          <ControlValue label="ROUND 1 STATUS" value={completedTeams.length > 0 ? "IN PROGRESS / COMPLETE" : "NOT STARTED"} />
+          <ControlValue label="TOTAL TEAMS" value={totalTeams} />
+          {/* NOTE: denominator is totalTeams (live), not a hardcoded 8 */}
+          <ControlValue label="COMPLETED" value={`${completedTeams.length} / ${totalTeams}`} />
           <ControlValue label="QUALIFIED" value={`${qualified.length} / ${completedTeams.length}`} />
         </div>
-        <div className="table-wrap">
-          <table className="admin-table">
-            <thead><tr><th>TEAM</th><th>PROGRESS</th><th>CHALLENGES</th><th>COMPLETION TIME</th></tr></thead>
-            <tbody>
-              {adminTeams.map((team) => (
-                <tr key={team.id}>
-                  <td>{team.name}</td>
-                  <td><span className={team.completed ? "table-ok" : ""}>{team.r1Challenges} / 6</span></td>
-                  <td>{team.r1Challenges}</td>
-                  <td>{team.completed ? team.time : "-"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        {teams.length === 0 ? (
+          <EmptyTeamsState />
+        ) : (
+          <div className="table-wrap">
+            <table className="admin-table">
+              {/*
+               * SCHEMA NOTE: No "r1Challenges" field exists in MongoDB.
+               * round1_stage (0-5) is the closest equivalent and is displayed as "X / 5".
+               * round1_complete_at (UTC datetime) is shown instead of an elapsed duration.
+               */}
+              <thead><tr><th>TEAM</th><th>STAGES COMPLETED</th><th>COMPLETION TIME</th></tr></thead>
+              <tbody>
+                {teams.map((team) => {
+                  const done = team.round1_complete_at != null;
+                  return (
+                    <tr key={team.team_name}>
+                      <td>{team.team_name}</td>
+                      <td>
+                        <span className={done ? "table-ok" : ""}>
+                          {team.round1_stage} / 5
+                        </span>
+                      </td>
+                      {/* round1_complete_at is a UTC datetime — displayed as local time */}
+                      <td>{fmtTimestamp(team.round1_complete_at)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
+
       <section className="admin-panel">
         <SectionTitle kicker="ROUND 2 QUALIFICATION" title="Select completed teams" />
         <p className="panel-note">Only teams that completed Round 1 can be selected.</p>
-        <div className="table-wrap">
-          <table className="admin-table qualification">
-            <thead><tr><th>TEAM NAME</th><th>ROUND 1 STATUS</th><th>SELECT</th></tr></thead>
-            <tbody>
-              {adminTeams.map((team) => (
-                <tr key={team.id}>
-                  <td>{team.name}</td>
-                  <td>{team.completed ? <span className="table-ok">COMPLETED</span> : <span className="muted-cell">INCOMPLETE</span>}</td>
-                  <td>
-                    <button
-                      className={selected.includes(team.id) ? "check selected" : "check"}
-                      disabled={!team.completed || qualified.includes(team.id) || round2Unlocked}
-                      onClick={() => toggleEligible(team.id)}
-                    >
-                      {selected.includes(team.id) || qualified.includes(team.id) ? "V" : ""}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        {teams.length === 0 ? (
+          <EmptyTeamsState />
+        ) : (
+          <div className="table-wrap">
+            <table className="admin-table qualification">
+              <thead><tr><th>TEAM NAME</th><th>ROUND 1 STATUS</th><th>SELECT</th></tr></thead>
+              <tbody>
+                {teams.map((team) => {
+                  const done = team.round1_complete_at != null;
+                  return (
+                    <tr key={team.team_name}>
+                      <td>{team.team_name}</td>
+                      <td>{done ? <span className="table-ok">COMPLETED</span> : <span className="muted-cell">INCOMPLETE</span>}</td>
+                      <td>
+                        <button
+                          className={selected.includes(team.team_name) ? "check selected" : "check"}
+                          disabled={!done || qualified.includes(team.team_name) || round2Unlocked}
+                          onClick={() => toggleEligible(team.team_name)}
+                        >
+                          {selected.includes(team.team_name) || qualified.includes(team.team_name) ? "V" : ""}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
         <div className="qualification-footer">
           <span>{qualified.length ? `${qualified.length} team(s) already qualified` : `${selected.length} selected`}</span>
           <button className="admin-btn primary" disabled={!selected.length || round2Unlocked} onClick={openQualificationConfirm}>Confirm Qualified Teams</button>
@@ -209,103 +305,231 @@ function AdminRound1({ completedTeams, selected, toggleEligible, qualified, open
   );
 }
 
-function AdminChat({ teams, chatTeam, setChatTeam, activeChatTeam }) {
-  const [activeChallenge, setActiveChallenge] = useState(0);
-  const conv = challengeChatMessages[activeChallenge];
+/**
+ * AdminTranscript — replaces both the old AdminChat (fake challenge tabs) and
+ * AdminLogs (fake event log).  Shows real chat_logs entries from the backend,
+ * grouped by round → stage, chronological order within each group.
+ *
+ * NOTE: The old "Activity Logs" tab showed event-level rows (R1 time, action,
+ * challenges completed).  No such collection exists in MongoDB.  This viewer
+ * shows the actual per-message chat_logs transcript instead.
+ */
+function AdminTranscript({ teams, transcriptTeam, setTranscriptTeam }) {
+  const [logs, setLogs] = useState(null);     // null = not yet fetched
+  const [logsLoading, setLogsLoading] = useState(false);
+  const [logsError, setLogsError] = useState("");
+
+  const loadLogs = useCallback(async (teamName) => {
+    if (!teamName) return;
+    setLogsLoading(true);
+    setLogsError("");
+    setLogs(null);
+    try {
+      const data = await fetchTeamLogs(teamName);
+      setLogs(data);
+    } catch (err) {
+      setLogsError(err instanceof Error ? err.message : "Failed to load transcript.");
+    } finally {
+      setLogsLoading(false);
+    }
+  }, []);
+
+  // Load logs whenever the selected team changes
+  useEffect(() => {
+    loadLogs(transcriptTeam);
+  }, [transcriptTeam, loadLogs]);
+
+  // Group logs by round then stage for readable display
+  const grouped = [];
+  if (logs && logs.length > 0) {
+    let currentKey = null;
+    let currentGroup = null;
+    for (const entry of logs) {
+      const key = `${entry.round}-${entry.stage}`;
+      if (key !== currentKey) {
+        currentGroup = { round: entry.round, stage: entry.stage, messages: [] };
+        grouped.push(currentGroup);
+        currentKey = key;
+      }
+      currentGroup.messages.push(entry);
+    }
+  }
+
   return (
     <section className="admin-panel chat-monitor">
-      <SectionTitle kicker="ADMIN-ONLY TEAM CHAT" title="Team Chat" />
-      <div className="challenge-tabs-row">
-        {challenges.map((_, i) => (
-          <button key={i} className={activeChallenge === i ? "challenge-tab active" : "challenge-tab"} onClick={() => setActiveChallenge(i)}>
-            Challenge {String(i + 1).padStart(2, "0")}
-          </button>
-        ))}
-      </div>
-      <div className="chat-admin-layout">
-        <div className="chat-team-list">
-          {teams.map((team) => (
-            <button key={team.id} className={chatTeam === team.id ? "chat-team active" : "chat-team"} onClick={() => setChatTeam(team.id)}>
-              {team.name}<span>{team.email}</span>
-            </button>
-          ))}
-        </div>
-        <div className="admin-chat-window">
-          <div className="admin-chat-head">
-            <div><strong>{activeChatTeam.name}</strong><span>Challenge {String(activeChallenge + 1).padStart(2, "0")}</span></div>
-            <span className="admin-only-badge">ADMIN ACCESS</span>
+      <SectionTitle kicker="TEAM TRANSCRIPT VIEWER" title="Chat Logs" />
+      {teams.length === 0 ? (
+        <EmptyTeamsState />
+      ) : (
+        <div className="chat-admin-layout">
+          {/* Team picker sidebar */}
+          <div className="chat-team-list">
+            {teams.map((team) => (
+              <button
+                key={team.team_name}
+                className={transcriptTeam === team.team_name ? "chat-team active" : "chat-team"}
+                onClick={() => setTranscriptTeam(team.team_name)}
+              >
+                {team.team_name}
+                <span>{team.email}</span>
+              </button>
+            ))}
           </div>
-          <div className="admin-messages">
-            <div className="admin-message"><span>{conv.team.replace("{name}", activeChatTeam.name)}</span><p>{conv.msg}</p></div>
-            <div className="admin-message control"><span>{conv.ctrl}</span><p>{conv.reply}</p></div>
+
+          {/* Transcript pane */}
+          <div className="admin-chat-window">
+            <div className="admin-chat-head">
+              <div>
+                <strong>{transcriptTeam || "Select a team"}</strong>
+                <span>Chat transcript (chat_logs)</span>
+              </div>
+              <span className="admin-only-badge">ADMIN ACCESS</span>
+            </div>
+
+            <div className="admin-messages">
+              {logsLoading && (
+                <div className="admin-transcript-loading">
+                  <LoadingState />
+                </div>
+              )}
+
+              {logsError && !logsLoading && (
+                <div className="admin-transcript-error">
+                  <p>{logsError}</p>
+                  <button className="admin-btn secondary" onClick={() => loadLogs(transcriptTeam)}>Retry</button>
+                </div>
+              )}
+
+              {!logsLoading && !logsError && logs !== null && logs.length === 0 && (
+                <div className="admin-transcript-empty">
+                  <p>No chat history yet for this team.</p>
+                </div>
+              )}
+
+              {!logsLoading && !logsError && grouped.map((group, gi) => (
+                <div key={gi} className="transcript-group">
+                  <div className="transcript-group-header">
+                    Round {group.round} — Stage {group.stage}
+                  </div>
+                  {group.messages.map((msg, mi) => (
+                    <div
+                      key={mi}
+                      className={`admin-message${msg.role === "assistant" ? " control" : ""}`}
+                    >
+                      <span>
+                        {fmtTimestamp(msg.timestamp)} — {msg.role === "assistant" ? "CHALLENGE CONTROL" : transcriptTeam}
+                      </span>
+                      <p>{msg.message}</p>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+
+            <div className="admin-chat-note">Admin-only monitoring view. Data from chat_logs collection.</div>
           </div>
-          <div className="admin-chat-note">Admin-only monitoring view.</div>
         </div>
-      </div>
+      )}
     </section>
   );
 }
 
 function AdminLeaderboard({ teams, qualified, unlocked }) {
+  if (teams.length === 0) return (
+    <section className="admin-panel">
+      <SectionTitle kicker="LEADERBOARD" title="Live leaderboard" />
+      <EmptyTeamsState />
+    </section>
+  );
+
+  /*
+   * SCHEMA NOTE: No r1Challenges / r2Challenges fields. We sort by round1_stage
+   * (stages completed, 0-5) descending, then by round1_complete_at ascending
+   * (earlier completion = better rank).  round2_stage used for Round 2 column.
+   * There is no "time" elapsed field — round1_complete_at datetime is displayed.
+   */
   const rows = [...teams].sort((a, b) => {
-    const aT = a.r1Challenges + (unlocked && qualified.includes(a.id) ? a.r2Challenges : 0);
-    const bT = b.r1Challenges + (unlocked && qualified.includes(b.id) ? b.r2Challenges : 0);
-    return bT - aT || a.time.localeCompare(b.time);
+    const aStages = a.round1_stage + (unlocked && qualified.includes(a.team_name) ? a.round2_stage : 0);
+    const bStages = b.round1_stage + (unlocked && qualified.includes(b.team_name) ? b.round2_stage : 0);
+    if (bStages !== aStages) return bStages - aStages;
+    // Tiebreak: earlier completion first; if neither completed, keep order
+    if (a.round1_complete_at && b.round1_complete_at) {
+      return new Date(a.round1_complete_at) - new Date(b.round1_complete_at);
+    }
+    return a.round1_complete_at ? -1 : b.round1_complete_at ? 1 : 0;
   });
+
   return (
     <section className="admin-panel">
       <SectionTitle kicker="LEADERBOARD" title="Live leaderboard" />
       <div className="table-wrap">
         <table className="admin-table">
-          <thead><tr><th>RANK</th><th>TEAM</th><th>ROUND 1</th><th>ROUND 2</th><th>TOTAL</th><th>TIME</th></tr></thead>
+          {/* NOTE: columns use "stages" (0-5) not "challenges" (no such field) */}
+          <thead><tr><th>RANK</th><th>TEAM</th><th>R1 STAGES</th><th>R2 STAGES</th><th>TOTAL</th><th>R1 COMPLETED AT</th></tr></thead>
           <tbody>
             {rows.map((team, i) => {
-              const r2 = unlocked && qualified.includes(team.id) ? team.r2Challenges : null;
-              const total = team.r1Challenges + (r2 !== null ? r2 : 0);
-              return <tr key={team.id}><td>#{i + 1}</td><td>{team.name}</td><td>{team.r1Challenges}/6</td><td>{r2 !== null ? `${r2}/6` : "-"}</td><td>{total}</td><td>{team.time}</td></tr>;
+              const r2 = unlocked && qualified.includes(team.team_name) ? team.round2_stage : null;
+              const total = team.round1_stage + (r2 !== null ? r2 : 0);
+              return (
+                <tr key={team.team_name}>
+                  <td>#{i + 1}</td>
+                  <td>{team.team_name}</td>
+                  <td>{team.round1_stage}/5</td>
+                  <td>{r2 !== null ? `${r2}/5` : "—"}</td>
+                  <td>{total}</td>
+                  <td>{fmtTimestamp(team.round1_complete_at)}</td>
+                </tr>
+              );
             })}
           </tbody>
         </table>
-      </div>
-    </section>
-  );
-}
-
-function AdminLogs({ logs }) {
-  return (
-    <section className="admin-panel">
-      <SectionTitle kicker="ACTIVITY LOGS" title="Event activity" />
-      <div className="log-list">
-        <div className="log-row log-head"><span>TEAM</span><span>R1 TIME</span><span>R2 TIME</span><span>ACTION</span><span>CHALLENGES</span></div>
-        {logs.map((log, i) => (
-          <div className="log-row" key={i}>
-            <span>{log.team}</span><span>{log.r1Time}</span><span>{log.r2Time}</span>
-            <span className="log-action">{log.action}</span><span className="log-result">{log.challenges}</span>
-          </div>
-        ))}
-        {logs.length === 0 && <div className="log-row"><span style={{ gridColumn: "1/-1", textAlign: "center" }}>No activity logged yet.</span></div>}
       </div>
     </section>
   );
 }
 
 function AdminResults({ teams, qualified, unlocked }) {
+  if (teams.length === 0) return (
+    <section className="admin-panel">
+      <SectionTitle kicker="FINAL RESULTS" title="Results" />
+      <EmptyTeamsState />
+    </section>
+  );
+
   const rows = [...teams].sort((a, b) => {
-    const aT = a.r1Challenges + (unlocked && qualified.includes(a.id) ? a.r2Challenges : 0);
-    const bT = b.r1Challenges + (unlocked && qualified.includes(b.id) ? b.r2Challenges : 0);
-    return bT - aT || a.time.localeCompare(b.time);
+    const aStages = a.round1_stage + (unlocked && qualified.includes(a.team_name) ? a.round2_stage : 0);
+    const bStages = b.round1_stage + (unlocked && qualified.includes(b.team_name) ? b.round2_stage : 0);
+    if (bStages !== aStages) return bStages - aStages;
+    if (a.round1_complete_at && b.round1_complete_at) {
+      return new Date(a.round1_complete_at) - new Date(b.round1_complete_at);
+    }
+    return a.round1_complete_at ? -1 : b.round1_complete_at ? 1 : 0;
   });
+
   return (
     <section className="admin-panel">
       <SectionTitle kicker="FINAL RESULTS" title="Results" />
       <div className="table-wrap">
         <table className="admin-table">
-          <thead><tr><th>RANK</th><th>TEAM</th><th>R1 CHALLENGES</th><th>R2 CHALLENGES</th><th>STATUS</th></tr></thead>
+          <thead><tr><th>RANK</th><th>TEAM</th><th>R1 STAGES</th><th>R2 STAGES</th><th>STATUS</th></tr></thead>
           <tbody>
             {rows.map((team, i) => {
-              const r2 = unlocked && qualified.includes(team.id) ? team.r2Challenges : null;
-              const status = unlocked && qualified.includes(team.id) ? <span className="table-ok">QUALIFIED</span> : team.completed ? "ROUND 1 COMPLETE" : <span className="muted-cell">IN PROGRESS</span>;
-              return <tr key={team.id}><td>#{i + 1}</td><td>{team.name}</td><td>{team.r1Challenges}/6</td><td>{r2 !== null ? `${r2}/6` : "-"}</td><td>{status}</td></tr>;
+              const done = team.round1_complete_at != null;
+              const r2 = unlocked && qualified.includes(team.team_name) ? team.round2_stage : null;
+              const status = unlocked && qualified.includes(team.team_name)
+                ? <span className="table-ok">QUALIFIED</span>
+                : done
+                  ? "ROUND 1 COMPLETE"
+                  : <span className="muted-cell">IN PROGRESS</span>;
+              return (
+                <tr key={team.team_name}>
+                  <td>#{i + 1}</td>
+                  <td>{team.team_name}</td>
+                  <td>{team.round1_stage}/5</td>
+                  <td>{r2 !== null ? `${r2}/5` : "—"}</td>
+                  <td>{status}</td>
+                </tr>
+              );
             })}
           </tbody>
         </table>
@@ -314,31 +538,59 @@ function AdminResults({ teams, qualified, unlocked }) {
   );
 }
 
+// ── Main admin shell ──────────────────────────────────────────────────────────
+
 export default function AdminPage() {
   const [section, setSection] = useState("dashboard");
   const [selected, setSelected] = useState([]);
   const [qualified, setQualified] = useState([]);
   const [round2Unlocked, setRound2Unlocked] = useState(false);
-  const [chatTeam, setChatTeam] = useState(adminTeams[0].id);
   const [confirmUnlockOpen, setConfirmUnlockOpen] = useState(false);
   const [confirmQualOpen, setConfirmQualOpen] = useState(false);
   const [notice, setNotice] = useState("");
   const [remaining, setRemaining] = useState(5076);
-  const [adminLogs, setAdminLogs] = useState(initialAdminLogs);
 
+  // ── Real data state (replaces all static mock arrays) ──────────────────────
+  const [teams, setTeams] = useState([]);
+  const [teamsLoading, setTeamsLoading] = useState(true);
+  const [teamsError, setTeamsError] = useState("");
+
+  // For the transcript viewer
+  const [transcriptTeam, setTranscriptTeam] = useState("");
+
+  // ── Fetch teams from backend ─────────────────────────────────────────────────
+  const loadTeams = useCallback(async () => {
+    setTeamsLoading(true);
+    setTeamsError("");
+    try {
+      const data = await fetchAdminTeams();
+      setTeams(data);
+      // Pre-select first team for the transcript viewer if none chosen yet
+      if (data.length > 0 && !transcriptTeam) {
+        setTranscriptTeam(data[0].team_name);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error fetching teams.";
+      setTeamsError(msg);
+    } finally {
+      setTeamsLoading(false);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    loadTeams();
+  }, [loadTeams]);
+
+  // ── Event timer ──────────────────────────────────────────────────────────────
   useEffect(() => {
     const timer = window.setInterval(() => setRemaining((v) => Math.max(0, v - 1)), 1000);
     return () => window.clearInterval(timer);
   }, []);
 
-  const completedTeams = adminTeams.filter((t) => t.completed);
+  // ── Derived values ───────────────────────────────────────────────────────────
+  const completedTeams = teams.filter((t) => t.round1_complete_at != null);
   const qualifiedCount = qualified.length;
   const round2Active = round2Unlocked ? Math.min(qualifiedCount, 3) : 0;
-
-  function addLog(team, r1Time, r2Time, action, challs) {
-    const ts = new Date().toLocaleTimeString("en-GB", { hour12: false });
-    setAdminLogs((prev) => [{ ts, team, r1Time, r2Time, action, challenges: challs }, ...prev]);
-  }
 
   function formatTimer(total) {
     const h = String(Math.floor(total / 3600)).padStart(2, "0");
@@ -347,9 +599,9 @@ export default function AdminPage() {
     return `${h}:${m}:${s}`;
   }
 
-  function toggleEligible(id) {
-    if (round2Unlocked || !completedTeams.some((t) => t.id === id)) return;
-    setSelected((cur) => cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]);
+  function toggleEligible(teamName) {
+    if (round2Unlocked || !completedTeams.some((t) => t.team_name === teamName)) return;
+    setSelected((cur) => cur.includes(teamName) ? cur.filter((x) => x !== teamName) : [...cur, teamName]);
   }
 
   function openQualificationConfirm() {
@@ -358,23 +610,65 @@ export default function AdminPage() {
   }
 
   function confirmQualification() {
-    const toQualify = adminTeams.filter((t) => selected.includes(t.id));
-    toQualify.forEach((t) => addLog(t.name, t.time, "-", "Team qualified for Round 2", `R1: ${t.r1Challenges}/6, R2: -`));
     setQualified(selected);
     setSelected([]);
     setConfirmQualOpen(false);
-    setNotice(`${toQualify.length} team(s) qualified for Round 2. Round 2 is still LOCKED.`);
+    setNotice(`${selected.length} team(s) qualified for Round 2. Round 2 is still LOCKED.`);
   }
 
   function unlockRound2() {
     if (!qualified.length) { setNotice("Round 2 cannot be unlocked until qualified teams are confirmed."); return; }
     setRound2Unlocked(true);
     setConfirmUnlockOpen(false);
-    addLog("-", "-", "-", "Round 2 unlocked", `${qualified.length} team(s) granted access`);
     setNotice(`Round 2 UNLOCKED for ${qualified.length} qualified team(s).`);
   }
 
-  const activeChatTeam = adminTeams.find((t) => t.id === chatTeam) || adminTeams[0];
+  // ── Shared content area ──────────────────────────────────────────────────────
+
+  function renderContent() {
+    if (teamsLoading) return <LoadingState />;
+    if (teamsError) return <ErrorState message={teamsError} onRetry={loadTeams} />;
+
+    switch (section) {
+      case "dashboard":
+        return (
+          <AdminDashboard
+            formatTimer={formatTimer}
+            remaining={remaining}
+            teams={teams}
+          />
+        );
+      case "teams":
+        return <AdminTeams teams={teams} />;
+      case "round1":
+        return (
+          <AdminRound1
+            teams={teams}
+            selected={selected}
+            toggleEligible={toggleEligible}
+            qualified={qualified}
+            openQualificationConfirm={openQualificationConfirm}
+            round2Unlocked={round2Unlocked}
+          />
+        );
+      case "chat":
+      case "logs":
+        // Both tabs now go to the transcript viewer (old "logs" = fake event log, now real chat_logs)
+        return (
+          <AdminTranscript
+            teams={teams}
+            transcriptTeam={transcriptTeam}
+            setTranscriptTeam={setTranscriptTeam}
+          />
+        );
+      case "leaderboard":
+        return <AdminLeaderboard teams={teams} qualified={qualified} unlocked={round2Unlocked} />;
+      case "results":
+        return <AdminResults teams={teams} qualified={qualified} unlocked={round2Unlocked} />;
+      default:
+        return null;
+    }
+  }
 
   return (
     <main className="admin-shell">
@@ -385,8 +679,22 @@ export default function AdminPage() {
             <div><strong>PROMPT HEIST</strong><span>AI JAILBREAK</span></div>
           </div>
           <nav className="admin-nav">
-            {[["dashboard", "Dashboard"], ["teams", "Teams"], ["round1", "Round 1"], ["chat", "Team Chat"], ["leaderboard", "Leaderboard"], ["logs", "Activity Logs"], ["results", "Results"]].map(([id, label]) => (
-              <button key={id} className={section === id ? "admin-nav-item active" : "admin-nav-item"} onClick={() => setSection(id)}>{label}</button>
+            {[
+              ["dashboard", "Dashboard"],
+              ["teams", "Teams"],
+              ["round1", "Round 1"],
+              ["chat", "Team Chat / Transcripts"],
+              ["leaderboard", "Leaderboard"],
+              ["logs", "Activity Logs"],
+              ["results", "Results"],
+            ].map(([id, label]) => (
+              <button
+                key={id}
+                className={section === id ? "admin-nav-item active" : "admin-nav-item"}
+                onClick={() => setSection(id)}
+              >
+                {label}
+              </button>
             ))}
           </nav>
         </div>
@@ -404,29 +712,30 @@ export default function AdminPage() {
         </header>
         <div className="admin-content">
           {notice && <div className="admin-notice">{notice}<button onClick={() => setNotice("")}>X</button></div>}
-          {section === "dashboard" && <AdminDashboard formatTimer={formatTimer} remaining={remaining} activeTeams={6} completedCount={completedTeams.length} qualifiedCount={qualifiedCount} round2Active={round2Active} round2Unlocked={round2Unlocked} setSection={setSection} />}
-          {section === "teams" && <AdminTeams />}
-          {section === "round1" && <AdminRound1 completedTeams={completedTeams} selected={selected} toggleEligible={toggleEligible} qualified={qualified} openQualificationConfirm={openQualificationConfirm} round2Unlocked={round2Unlocked} />}
-          {section === "chat" && <AdminChat teams={adminTeams} chatTeam={chatTeam} setChatTeam={setChatTeam} activeChatTeam={activeChatTeam} />}
-          {section === "leaderboard" && <AdminLeaderboard teams={adminTeams} qualified={qualified} unlocked={round2Unlocked} />}
-          {section === "logs" && <AdminLogs logs={adminLogs} />}
-          {section === "results" && <AdminResults teams={adminTeams} qualified={qualified} unlocked={round2Unlocked} />}
 
+          {renderContent()}
+
+          {/* Event control panel — always visible at bottom */}
           <section className="admin-control-panel" id="event-control">
             <div><div className="section-kicker">EVENT CONTROL</div><h2>Event control</h2></div>
             <div className="control-grid">
               <ControlValue label="EVENT STATUS" value="LIVE" />
               <ControlValue label="CURRENT ROUND" value={round2Unlocked ? "ROUND 2" : "ROUND 1"} />
               <ControlValue label="EVENT TIMER" value={formatTimer(remaining)} />
-              <ControlValue label="ROUND 1 STATUS" value="COMPLETED" />
+              <ControlValue
+                label="ROUND 1 STATUS"
+                value={teamsLoading ? "Loading…" : completedTeams.length > 0 ? `${completedTeams.length} / ${teams.length} COMPLETE` : "IN PROGRESS"}
+              />
             </div>
             <div className="control-actions">
               <button className="admin-btn secondary" onClick={() => setSection("round1")}>Manage Qualification</button>
+              <button className="admin-btn secondary" onClick={loadTeams}>↺ Refresh Data</button>
             </div>
           </section>
         </div>
       </section>
 
+      {/* Confirm unlock Round 2 modal */}
       {confirmUnlockOpen && (
         <div className="admin-modal-backdrop" role="dialog" aria-modal="true">
           <div className="admin-modal">
@@ -441,6 +750,7 @@ export default function AdminPage() {
         </div>
       )}
 
+      {/* Confirm qualification modal */}
       {confirmQualOpen && (
         <div className="admin-modal-backdrop" role="dialog" aria-modal="true">
           <div className="admin-modal">
