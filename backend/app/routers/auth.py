@@ -9,23 +9,20 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from motor.motor_asyncio import AsyncIOMotorDatabase
-from passlib.context import CryptContext
+import bcrypt
 
 from app.db import get_db
 from app.models import TeamCreate, TeamLogin, AuthResponse
 
 router = APIRouter()
 
-# bcrypt password hashing context
-_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 
 def _hash_password(plain: str) -> str:
-    return _pwd_context.hash(plain)
+    return bcrypt.hashpw(plain.encode(), bcrypt.gensalt()).decode()
 
 
 def _verify_password(plain: str, hashed: str) -> bool:
-    return _pwd_context.verify(plain, hashed)
+    return bcrypt.checkpw(plain.encode(), hashed.encode())
 
 
 def _new_token() -> str:

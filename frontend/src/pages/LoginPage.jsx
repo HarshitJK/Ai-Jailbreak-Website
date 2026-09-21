@@ -14,18 +14,7 @@ export const overview = [
   "The fastest teams with the highest progress will be declared winners."
 ];
 
-/* ═══════════════════════════════════════════════════════════════════════════
-   PASSWORD SECURITY
-═══════════════════════════════════════════════════════════════════════════ */
-export function validatePassword(pw) {
-  const rules = [
-    { label: "Must be exactly 4 characters", ok: pw.length === 4 }
-  ];
-  const passed = rules.filter((r) => r.ok).length;
-  const valid = passed === 1;
-  let strength = valid ? "strong" : "weak";
-  return { valid, strength, rules, passed };
-}
+
 
 /* ═══════════════════════════════════════════════════════════════════════════
    LOGIN PAGE (ParticipantAuthPage)
@@ -46,7 +35,7 @@ export default function LoginPage({
     }
   }, [location.state, setMode]);
 
-  const pwAnalysis = password ? validatePassword(password) : null;
+
 
   useEffect(() => {
     if (!loginLockoutUntil) { setLockSecsLeft(0); return; }
@@ -125,25 +114,9 @@ export default function LoginPage({
                     )}
                   </button>
                 </div>
-                {password && pwAnalysis && (
-                  <div className="pw-strength-wrap">
-                    <div className="pw-strength-bar">
-                      <div className={`pw-strength-fill strength-${pwAnalysis.strength}`} style={{ width: `${(pwAnalysis.passed / 4) * 100}%` }} />
-                    </div>
-                    <span className={`pw-strength-label strength-${pwAnalysis.strength}`}>
-                      {pwAnalysis.strength === "weak" ? "Weak" : pwAnalysis.strength === "medium" ? "Medium" : "Strong"}
-                    </span>
-                    {!pwAnalysis.valid && (
-                      <ul className="pw-requirements">
-                        {pwAnalysis.rules.filter((r) => !r.ok).map((r, i) => (
-                          <li key={i} className="pw-req-item">X {r.label}</li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                )}
+
               </label>
-              <button className="primary-btn" type="submit">Create Account <span>to</span></button>
+              <button className="primary-btn" type="submit">Create Account </button>
             </form>
           ) : (
             <form onSubmit={(e) => { e.preventDefault(); login(); }}>
@@ -188,7 +161,7 @@ export default function LoginPage({
                 </div>
               )}
               <button className="primary-btn" type="submit" disabled={isLockedOut}>
-                Start Challenge <span>to</span>
+                Start Challenge
               </button>
             </form>
           )}

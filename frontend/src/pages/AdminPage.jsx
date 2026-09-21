@@ -1,6 +1,6 @@
-﻿import React, { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { validatePassword } from "./LoginPage";
+
 import { challenges } from "./Round1Page";
 
 const adminTeams = [
@@ -67,7 +67,7 @@ export function AdminLoginPage({ setAdminAuthenticated }) {
     }
   }
 
-  const pwAnalysis = password ? validatePassword(password) : null;
+
 
   return (
     <main className="auth-page">
@@ -99,16 +99,7 @@ export function AdminLoginPage({ setAdminAuthenticated }) {
                   )}
                 </button>
               </div>
-              {password && pwAnalysis && (
-                <div className="pw-strength-wrap">
-                  <div className="pw-strength-bar">
-                    <div className={`pw-strength-fill strength-${pwAnalysis.strength}`} style={{ width: `${(pwAnalysis.passed / 4) * 100}%` }} />
-                  </div>
-                  <span className={`pw-strength-label strength-${pwAnalysis.strength}`}>
-                    {pwAnalysis.strength === "weak" ? "Weak" : pwAnalysis.strength === "medium" ? "Medium" : "Strong"}
-                  </span>
-                </div>
-              )}
+
             </label>
             <button className="primary-btn" type="submit">Access Dashboard</button>
           </form>

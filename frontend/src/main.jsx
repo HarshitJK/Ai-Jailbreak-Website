@@ -5,7 +5,7 @@ import "./styles.css";
 import "./party.css";
 import { launchPartyEffect } from "./party.js";
 
-import LoginPage, { validatePassword, overview } from "./pages/LoginPage";
+import LoginPage, { overview } from "./pages/LoginPage";
 import { sendChatMessage, registerTeam, loginTeam } from "./lib/apiClient";
 import Round1Page, { challenges, Brand } from "./pages/Round1Page";
 import AdminPage, { AdminLoginPage } from "./pages/AdminPage";
@@ -101,10 +101,7 @@ function App() {
   async function register() {
     setError("");
     if (!team.trim() || !email.trim() || !password.trim()) { setError("Please complete all three fields."); return; }
-    if (team.trim().length !== 4) { setError("Team name must be exactly 4 characters."); return; }
     if (!email.includes("@")) { setError("Enter a valid email address."); return; }
-    const pwCheck = validatePassword(password);
-    if (!pwCheck.valid) { setError("Password must be exactly 4 characters."); return; }
     try {
       setLoading(true);
       const auth = await registerTeam({ team_name: team.trim(), email: email.trim(), password });

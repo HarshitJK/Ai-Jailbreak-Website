@@ -4,5 +4,5 @@ pydantic
 python-dotenv
 anthropic
 motor
-passlib[bcrypt]
+bcrypt
 python-multipart
