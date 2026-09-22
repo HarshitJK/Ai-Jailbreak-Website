@@ -108,6 +108,13 @@ export default function Round1Page({
   currentDone, allDone, mobileNav, setMobileNav, jumpToChallenge, submitPrompt, logout, onProceed
 }) {
   const activeChallenge = challenges[active];
+  const inputRef = React.useRef(null);
+
+  React.useEffect(() => {
+    if (!loading && !currentDone && inputRef.current) {
+      inputRef.current.focus({ preventScroll: true });
+    }
+  }, [loading, currentDone, active]);
 
   return (
     <main className="challenge-page">
@@ -161,38 +168,48 @@ export default function Round1Page({
           <div className="team-chip">{team}</div>
         </header>
 
-        <div className="chat-content">
-          {!allDone ? (
-            <>
-              {/* Challenge metadata strip */}
-              <div className="challenge-label">
-                Challenge {String(active + 1).padStart(2, "0")} â€” {activeChallenge.title}
-              </div>
+        <div className="chat-scroll-area">
+          <div className="chat-content-inner">
+            {!allDone ? (
+              <>
+                {/* Challenge metadata strip */}
+                <div className="challenge-label">
+                  Challenge {String(active + 1).padStart(2, "0")} â€” {activeChallenge.title}
+                </div>
 
-              <div className="messages">
-                {messages.map((msg) => (
-                  <div key={msg.id} className={msg.side === "user" ? "message-row user" : "message-row"}>
-                    <div className={msg.side === "user" ? "message-avatar red" : "message-avatar"}>
-                      {msg.side === "user" ? "Y" : "PH"}
+                <div className="messages">
+                  {messages.map((msg) => (
+                    <div key={msg.id} className={msg.side === "user" ? "message-row user" : "message-row"}>
+                      <div className={msg.side === "user" ? "message-avatar red" : "message-avatar"}>
+                        {msg.side === "user" ? "Y" : "PH"}
+                      </div>
+                      <div className="message-bubble">
+                        <div className="message-author">{msg.side === "user" ? "You" : "Challenge Control"}</div>
+                        <div className="message-text">{msg.text}</div>
+                      </div>
                     </div>
-                    <div className="message-bubble">
-                      <div className="message-author">{msg.side === "user" ? "You" : "Challenge Control"}</div>
-                      <div className="message-text">{msg.text}</div>
+                  ))}
+                  {loading && (
+                    <div className="message-row">
+                      <div className="message-avatar">PH</div>
+                      <div className="message-bubble">
+                        <div className="message-author">Challenge Control</div>
+                        <div className="typing"><i></i><i></i><i></i></div>
+                      </div>
                     </div>
-                  </div>
-                ))}
-                {loading && (
-                  <div className="message-row">
-                    <div className="message-avatar">PH</div>
-                    <div className="message-bubble">
-                      <div className="message-author">Challenge Control</div>
-                      <div className="typing"><i></i><i></i><i></i></div>
-                    </div>
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <Completion progress={progress} onProceed={onProceed} />
+            )}
+          </div>
+        </div>
 
-              {currentDone && !allDone ? (
+        {!allDone && (
+          <div className="chat-input-area">
+            <div className="chat-content-inner">
+              {currentDone ? (
                 <div style={{ display: "flex", justifyContent: "center", padding: "20px 0", width: "100%" }}>
                   <button
                     className="primary-btn"
@@ -211,37 +228,33 @@ export default function Round1Page({
                   </button>
                 </div>
               ) : (
-                <>
-                  <div className="composer-wrap">
-                    <textarea
-                      value={input}
-                      disabled={loading || currentDone}
-                      onChange={(e) => setInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey) {
-                          e.preventDefault();
-                          submitPrompt();
-                        }
-                      }}
-                      placeholder="Enter your prompt..."
-                      rows="3"
-                    />
-                    <button
-                      className="send-btn"
-                      onClick={submitPrompt}
-                      disabled={!input.trim() || loading || currentDone}
-                    >
-                      Send <span>up</span>
-                    </button>
-                  </div>
-                  <div className="composer-note">Text-based interaction only</div>
-                </>
+                <div className="composer-wrap modern">
+                  <textarea
+                    ref={inputRef}
+                    value={input}
+                    disabled={loading || currentDone}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        submitPrompt();
+                      }
+                    }}
+                    placeholder="Type your message..."
+                    rows="1"
+                  />
+                  <button
+                    className="send-btn modern"
+                    onClick={submitPrompt}
+                    disabled={!input.trim() || loading || currentDone}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>
+                  </button>
+                </div>
               )}
-            </>
-          ) : (
-            <Completion progress={progress} onProceed={onProceed} />
-          )}
-        </div>
+            </div>
+          </div>
+        )}
       </section>
     </main>
   );

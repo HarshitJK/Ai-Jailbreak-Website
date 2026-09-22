@@ -20,15 +20,16 @@
 }
 
 * { box-sizing: border-box; }
-html, body, #root { min-height: 100%; margin: 0; }
-body { background: var(--bg); }
+html, body, #root { height: 100vh; overflow: hidden; margin: 0; }
+body { background: var(--bg); overflow: hidden; }
 button, input, textarea { font: inherit; }
 button { cursor: pointer; }
 button:disabled { cursor: not-allowed; }
-.app { min-height: 100vh; background: var(--bg); }
+.app { height: 100vh; overflow: hidden; background: var(--bg); }
 
 .auth-page {
-  min-height: 100vh;
+  height: 100vh;
+  overflow-y: auto;
   display: grid;
   grid-template-columns: 55% 45%;
   background: #090909;
@@ -109,12 +110,12 @@ input:focus, textarea:focus { border-color: rgba(220,38,38,.6); background: #131
 .auth-footer button { border: 0; background: none; color: #f87171; padding: 0; }
 
 .challenge-page {
-  min-height: 100vh; display: grid; grid-template-columns: 260px minmax(0, 1fr) 230px;
+  height: 100vh; overflow: hidden; display: grid; grid-template-columns: 260px minmax(0, 1fr) 230px;
   background: #090909;
 }
 .sidebar {
   background: #0d0d0d; border-right: 1px solid var(--border); padding: 23px 16px;
-  display: flex; flex-direction: column; min-height: 100vh;
+  display: flex; flex-direction: column; height: 100vh; overflow: hidden;
 }
 .brand-compact .brand-mark { width: 32px; height: 32px; }
 .brand-compact .brand-name { font-size: 13px; }
@@ -141,14 +142,21 @@ input:focus, textarea:focus { border-color: rgba(220,38,38,.6); background: #131
 }
 .sidebar-bottom button:hover { color: #fff; }
 
-.chat-area { min-width: 0; display: flex; flex-direction: column; }
+.chat-area { height: 100vh; overflow: hidden; min-width: 0; display: flex; flex-direction: column; }
 .chat-header {
-  height: 79px; padding: 0 34px; border-bottom: 1px solid var(--border);
+  height: 79px; flex-shrink: 0; padding: 0 34px; border-bottom: 1px solid var(--border);
   display: flex; align-items: center; justify-content: space-between;
 }
 .chat-header h1 { font: 600 17px "Space Grotesk"; margin: 5px 0 0; }
 .team-chip { border: 1px solid var(--border); background: #111; padding: 8px 11px; border-radius: 6px; font-size: 11px; color: #a1a1aa; }
-.chat-content { width: min(900px, calc(100% - 56px)); margin: 0 auto; flex: 1; padding: 40px 0 30px; display: flex; flex-direction: column; }
+.chat-scroll-area { flex: 1; min-height: 0; overflow-y: auto; width: 100%; scrollbar-width: thin; scrollbar-color: #111111 transparent; }
+.chat-scroll-area::-webkit-scrollbar { width: 6px; }
+.chat-scroll-area::-webkit-scrollbar-track { background: transparent; }
+.chat-scroll-area::-webkit-scrollbar-thumb { background-color: #111111; border-radius: 10px; }
+.chat-scroll-area::-webkit-scrollbar-thumb:hover { background-color: #222222; }
+.chat-content-inner { width: min(1200px, calc(100% - 40px)); margin: 0 auto; display: flex; flex-direction: column; }
+.chat-scroll-area .chat-content-inner { padding: 40px 0 30px; }
+.chat-input-area { width: 100%; padding-bottom: 25px; flex-shrink: 0; background: var(--bg); }
 .challenge-label { color: #ef4444; font: 600 11px "Space Grotesk"; letter-spacing: .1em; margin-bottom: 20px; }
 .messages { flex: 1; }
 .message-row { display: flex; gap: 13px; margin-bottom: 20px; }
@@ -178,6 +186,68 @@ input:focus, textarea:focus { border-color: rgba(220,38,38,.6); background: #131
 .send-btn:disabled { opacity: .35; }
 .composer-note { text-align: right; color: #52525b; font-size: 9px; margin-top: 7px; }
 
+.composer-wrap.modern {
+  position: relative;
+  margin: 0 auto;
+  width: 100%;
+  max-width: 1200px;
+  background: #111111;
+  border: 1px solid #2a2a2a;
+  border-radius: 20px;
+  display: flex;
+  align-items: flex-end;
+  padding: 6px 12px;
+}
+.composer-wrap.modern textarea {
+  flex: 1;
+  background: transparent;
+  border: 0;
+  color: #fff;
+  padding: 10px 8px;
+  font-size: 15px;
+  resize: none;
+  min-height: 24px;
+  line-height: 1.5;
+  outline: none;
+}
+.composer-wrap.modern textarea::placeholder {
+  color: #71717a;
+}
+.composer-wrap.modern textarea:focus {
+  background: transparent;
+  border-color: transparent;
+}
+.send-btn.modern {
+  position: static;
+  background: #fff;
+  color: #000;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  margin: 0 0 4px 8px;
+  border: 0;
+  transition: all 0.15s ease;
+}
+.send-btn.modern:disabled {
+  opacity: 1;
+  cursor: not-allowed;
+  background: #2a2a2a;
+  color: #555;
+}
+.send-btn.modern:hover:not(:disabled) {
+  background: #e5e5e5;
+  transform: scale(1.05);
+}
+.send-btn.modern svg {
+  width: 15px;
+  height: 15px;
+  stroke-width: 2.5px;
+}
+
 
 @media (max-width: 760px) {
   .auth-page { grid-template-columns: 1fr; }
@@ -199,7 +269,8 @@ input:focus, textarea:focus { border-color: rgba(220,38,38,.6); background: #131
   .sidebar.open { transform: translateX(0); }
   .mobile-backdrop { position: fixed; inset: 0; z-index: 55; background: rgba(0,0,0,.65); }
   .chat-header { padding: 0 20px 0 68px; }
-  .chat-content { width: calc(100% - 30px); padding-top: 30px; }
+  .chat-content-inner { width: calc(100% - 30px); }
+  .chat-scroll-area .chat-content-inner { padding-top: 30px; }
   .team-chip { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .message-bubble { max-width: 86%; }
 }
@@ -227,7 +298,7 @@ input:focus, textarea:focus { border-color: rgba(220,38,38,.6); background: #131
 .challenge-label { color: #ff4d4d !important; }
 
 /* Admin control center — isolated at /admin */
-.admin-shell { min-height: 100vh; background: #080808; color: #f5f5f5; display: flex; font-family: Inter, system-ui, sans-serif; }
+.admin-shell { height: 100vh; overflow-y: auto; background: #080808; color: #f5f5f5; display: flex; font-family: Inter, system-ui, sans-serif; }
 .admin-sidebar { width: 248px; flex: 0 0 248px; min-height: 100vh; position: sticky; top: 0; align-self: flex-start; background: #0d0d0d; border-right: 1px solid rgba(255,255,255,.08); padding: 26px 15px 20px; display: flex; flex-direction: column; justify-content: space-between; }
 .admin-brand { display: flex; align-items: center; gap: 11px; padding: 0 9px 28px; border-bottom: 1px solid rgba(255,255,255,.07); }
 .admin-brand-mark { width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid rgba(220,38,38,.55); color: #fff; font: 700 11px "Space Grotesk"; }

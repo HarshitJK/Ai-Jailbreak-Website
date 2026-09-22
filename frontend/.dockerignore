@@ -5,7 +5,7 @@ node_modules/
 dist/
 
 # Environment files (never leak real credentials into the image)
-.env
+# .env  <-- Commented out to allow Vite to bake in VITE_ADMIN_SECRET during build
 .env.local
 .env.*.local
 
