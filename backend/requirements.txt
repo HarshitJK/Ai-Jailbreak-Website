@@ -6,4 +6,5 @@ anthropic
 groq
 motor
 bcrypt
-python-multipart
+python-multipart
+python-jose[cryptography]

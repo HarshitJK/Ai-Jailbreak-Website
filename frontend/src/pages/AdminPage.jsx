@@ -25,7 +25,7 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { fetchAdminTeams, fetchTeamLogs } from "../lib/apiClient";
+import { fetchAdminTeams, fetchTeamLogs, adminLogin, adminLogout } from "../lib/apiClient";
 
 // ── Small shared UI atoms ─────────────────────────────────────────────────────
 
@@ -101,22 +101,28 @@ function fmtTimestamp(iso) {
   }
 }
 
-// ── Admin login page (frontend gatekeeper — unchanged from original) ───────────
+// ── Admin login page — posts to backend /api/admin/login ─────────────────────
 
-export function AdminLoginPage({ setAdminAuthenticated }) {
+export function AdminLoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const navigate = useNavigate();
 
-  function handleLogin(e) {
+  async function handleLogin(e) {
     e.preventDefault();
-    if (username === "admin" && password === "Admin@123") {
-      setAdminAuthenticated(true);
+    setError("");
+    setSubmitting(true);
+    try {
+      await adminLogin({ username, password });
+      // Backend set the admin_session cookie — navigate to dashboard
       navigate("/admin");
-    } else {
-      setError("Invalid admin credentials.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Invalid admin credentials.");
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -130,11 +136,11 @@ export function AdminLoginPage({ setAdminAuthenticated }) {
             <p>Enter your administrator credentials to access the dashboard.</p>
           </div>
           <form onSubmit={handleLogin}>
-            <label>Admin Username<input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Enter username" /></label>
+            <label>Admin Username<input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Enter username" disabled={submitting} /></label>
             <label>
               Admin Password
               <div className="pw-field-wrap">
-                <input type={showPw ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Enter admin password" />
+                <input type={showPw ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Enter admin password" disabled={submitting} />
                 <button type="button" className="pw-eye-btn" onClick={() => setShowPw(v => !v)}>
                   {showPw ? (
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -151,7 +157,9 @@ export function AdminLoginPage({ setAdminAuthenticated }) {
                 </button>
               </div>
             </label>
-            <button className="primary-btn" type="submit">Access Dashboard</button>
+            <button className="primary-btn" type="submit" disabled={submitting}>
+              {submitting ? "Verifying…" : "Access Dashboard"}
+            </button>
           </form>
           {error && <div className="form-message">{error}</div>}
         </div>
@@ -698,7 +706,19 @@ export default function AdminPage() {
             ))}
           </nav>
         </div>
-        <div className="admin-sidebar-foot"><strong>ADMIN</strong><span>EVENT CONTROL</span></div>
+        <div className="admin-sidebar-foot">
+          <strong>ADMIN</strong><span>EVENT CONTROL</span>
+          <button
+            className="admin-btn secondary"
+            style={{ marginTop: "0.5rem", width: "100%", fontSize: "0.8rem" }}
+            onClick={async () => {
+              try { await adminLogout(); } catch (_) {}
+              window.location.href = "/admin/login";
+            }}
+          >
+            Logout
+          </button>
+        </div>
       </aside>
 
       <section className="admin-main">

@@ -3,16 +3,21 @@ POST /api/chat — same path/shape as the current frontend expects.
 Implements stage-unlock logic exactly as the TS version did.
 Write-through to MongoDB: every message is logged to chat_logs,
 and stage completions update the teams collection.
+
+team_id is now derived from the verified session cookie (get_current_team),
+not from the request body — removes the spoofing risk.
 """
 
 import os
 from datetime import datetime, timezone
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from motor.motor_asyncio import AsyncIOMotorDatabase
+from pydantic import BaseModel
 
 from app.models import ChatRequest, ChatResponse
 from app.services import llm_client, session_store
+from app.services.jwt_auth import get_current_team
 from app.db import get_db
 
 # Import all stage personas
@@ -40,6 +45,14 @@ def check_unlock_condition(stage_num: int, ai_reply: str, _user_message: str) ->
     detection_string = PERSONAS[stage_num]["DETECTION_STRING"]
     # Case-insensitive substring match
     return detection_string.lower() in ai_reply.lower()
+
+
+class ChatLogRow(BaseModel):
+    round: int
+    stage: int
+    role: str
+    message: str
+    timestamp: datetime
 
 
 router = APIRouter()
@@ -90,23 +103,35 @@ async def _mark_stage_complete_in_db(
 @router.post("/api/chat")
 async def chat_endpoint(
     payload: ChatRequest,
+    team_id: str = Depends(get_current_team),
     db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> ChatResponse:
-    team_id = payload.team_id.strip()
+    # team_id comes from the verified session cookie — body field ignored even if sent
     stage_raw = payload.stage  # 0-indexed from frontend
     user_message = payload.message.strip()
 
-    # Validation (mirrors TS version exactly)
+    # Validation
     if (
-        not team_id
-        or not isinstance(stage_raw, int)
+        not isinstance(stage_raw, int)
         or stage_raw < 0
         or stage_raw >= TOTAL_STAGES
         or not user_message
     ):
         raise HTTPException(
             status_code=400,
-            detail="Missing or invalid fields. Expected: { team_id: string, stage: number (0–4), message: string }",
+            detail="Missing or invalid fields. Expected: { stage: number (0–4), message: string }",
+        )
+
+    # Validate that the team has unlocked this stage
+    team_doc = await db["teams"].find_one({"team_name": team_id})
+    if not team_doc:
+        raise HTTPException(status_code=404, detail="Team not found.")
+
+    current_unlocked_stage = team_doc.get("round1_stage", 0)
+    if stage_raw > current_unlocked_stage:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Stage {stage_raw + 1} is locked. You must complete the previous stages first."
         )
 
     # Frontend sends 0-indexed; convert to 1-indexed for persona lookup
@@ -151,3 +176,30 @@ async def chat_endpoint(
         stageComplete=stage_complete,
         nextStage=next_stage,
     )
+
+
+@router.get("/api/round1/{stage}/history", response_model=List[ChatLogRow])
+async def get_round1_history(
+    stage: int,
+    team_id: str = Depends(get_current_team),
+    db: AsyncIOMotorDatabase = Depends(get_db),
+) -> List[ChatLogRow]:
+    """
+    Return chronological chat history for a specific Round 1 stage for the current team.
+    `stage` parameter is 0-indexed to match the frontend conventions.
+    """
+    if stage < 0 or stage >= TOTAL_STAGES:
+        raise HTTPException(status_code=400, detail="Invalid stage")
+
+    stage_num = stage + 1  # 1-indexed for DB
+
+    cursor = db["chat_logs"].find(
+        {"team_id": team_id, "round": 1, "stage": stage_num},
+        {"_id": 0, "round": 1, "stage": 1, "role": 1, "message": 1, "timestamp": 1},
+    ).sort("timestamp", 1)
+
+    logs = []
+    async for doc in cursor:
+        logs.append(ChatLogRow(**doc))
+
+    return logs

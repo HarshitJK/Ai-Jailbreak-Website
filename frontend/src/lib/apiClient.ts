@@ -1,37 +1,33 @@
 /**
- * apiClient.ts — Frontend API client for Round 1 chat and team auth
+ * apiClient.ts — Frontend API client for all backend communication.
  *
  * Reads the backend base URL from VITE_API_BASE_URL (set in .env).
  * When VITE_API_BASE_URL is empty (Docker/nginx setup), requests go to
  * the same origin and nginx proxies /api/* to the backend.
  *
- * Round 1 chat traffic goes through sendChatMessage().
- * Team auth goes through registerTeam() and loginTeam().
- * Admin data goes through fetchAdminTeams() and fetchTeamLogs().
+ * ALL requests include `credentials: 'include'` so the session cookie
+ * (httpOnly, set by the backend) is automatically sent on every call.
+ * This is required for the JWT session to work cross-origin.
  *
- * Chat request shape:  { team_id, stage, message }
- *   - `stage` is the 0-indexed `active` value from main.jsx (0–4)
- *   - Backend translates it to 1-indexed internally
- *
- * Chat response shape: { reply, stageComplete, nextStage }
- *   - `nextStage` is the 0-indexed next stage, or null if all stages done
+ * Team identity is now derived from the session cookie server-side.
+ * Callers no longer need to supply team_id in request bodies for chat routes.
  */
 
 const API_BASE: string =
   ((import.meta as unknown as { env: Record<string, string> }).env
     .VITE_API_BASE_URL ?? "http://localhost:4000");
 
-// Admin secret read from VITE_ADMIN_SECRET — must match backend ADMIN_SECRET env var
+// Admin secret kept for direct API tooling (header-based fallback in backend)
 const ADMIN_SECRET: string =
   ((import.meta as unknown as { env: Record<string, string> }).env
     .VITE_ADMIN_SECRET ?? "");
 
-// ── Chat types (unchanged — backend contract preserved) ──────────────────────
+// ── Chat types (Round 1 — unchanged contract, team_id now optional) ───────────
 
 export interface ChatRequest {
-  team_id: string;
   stage: number;    // 0-indexed: 0 = Stage 1 … 4 = Stage 5
   message: string;
+  team_id?: string; // ignored by backend — kept so old callers don't break
 }
 
 export interface ChatResponse {
@@ -58,16 +54,23 @@ export interface AuthResponse {
   session_token: string;
 }
 
-// ── Admin types ───────────────────────────────────────────────────────────────
+export interface MeResponse {
+  team_id: string;
+  team_name: string;
+}
+
+// ── Admin auth types ──────────────────────────────────────────────────────────
+
+export interface AdminLoginRequest {
+  username: string;
+  password: string;
+}
+
+// ── Admin data types ──────────────────────────────────────────────────────────
 
 /**
  * Live progress snapshot for a single team.
  * Field names mirror the teams MongoDB collection exactly.
- *
- * NOTE: No elapsed-duration field exists in the schema.
- * round1_complete_at (ISO string) is the closest real value; the UI formats it.
- * round1_stage / round2_stage (0-5) serve as stages-completed counters.
- * There is no "r1Challenges" or "r2Challenges" field — round1_stage is used instead.
  */
 export interface AdminTeam {
   team_name: string;
@@ -91,11 +94,35 @@ export interface ChatLogEntry {
   timestamp: string;   // ISO datetime string
 }
 
+// ── Round 2 API types ─────────────────────────────────────────────────────────
+
+export interface Round2ChatRequest {
+  message: string;
+  // team_id omitted — comes from session cookie
+}
+
+export interface Round2ChatResponse {
+  reply: string;
+  stageComplete: boolean;
+  currentStage: number;          // 1-indexed, reflects stage AFTER any advance
+  systemMessage: string | null;  // non-null when a stage transition occurred
+}
+
+export interface Round2FlagRequest {
+  flag: string;
+  // team_id omitted — comes from session cookie
+}
+
+export interface Round2FlagResponse {
+  correct: boolean;
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 async function apiPost<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     method: "POST",
+    credentials: "include",  // send session cookie automatically
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
@@ -109,12 +136,13 @@ async function apiPost<T>(path: string, body: unknown): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-async function apiGet<T>(path: string, secret: string): Promise<T> {
+async function apiGet<T>(path: string, extraHeaders: Record<string, string> = {}): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     method: "GET",
+    credentials: "include",  // send session cookie automatically
     headers: {
       "Content-Type": "application/json",
-      "X-Admin-Secret": secret,
+      ...extraHeaders,
     },
   });
 
@@ -127,32 +155,61 @@ async function apiGet<T>(path: string, secret: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-// ── Auth API calls ────────────────────────────────────────────────────────────
+// ── Player auth API calls ─────────────────────────────────────────────────────
 
 /**
  * Register a new team. Returns { team_name, session_token } on success.
- * Throws an Error if the team name is already taken or the request fails.
+ * The backend also sets the httpOnly session cookie.
  */
 export async function registerTeam(payload: RegisterRequest): Promise<AuthResponse> {
   return apiPost<AuthResponse>("/api/register", payload);
 }
 
 /**
- * Log in an existing team. Returns { team_name, session_token } on success.
- * Throws an Error if credentials are wrong or the request fails.
+ * Log in an existing team.
+ * The backend sets an httpOnly JWT session cookie — no token storage needed.
  */
 export async function loginTeam(payload: LoginRequest): Promise<AuthResponse> {
   return apiPost<AuthResponse>("/api/login", payload);
 }
 
-// ── Chat API call ─────────────────────────────────────────────────────────────
+/**
+ * Clear the session cookie server-side (logout).
+ */
+export async function logoutTeam(): Promise<void> {
+  await apiPost<{ ok: boolean }>("/api/logout", {});
+}
 
 /**
- * Sends a chat message to the backend and returns the AI reply plus
- * unlock status.
- *
- * Throws an Error if the network request fails or the server returns
- * a non-OK status, so callers can catch and display an error state.
+ * Check current session — returns team info if logged in, throws 401 if not.
+ * Used by ProtectedRoute to verify the cookie is still valid.
+ */
+export async function getMe(): Promise<MeResponse> {
+  return apiGet<MeResponse>("/api/me");
+}
+
+// ── Admin auth API calls ──────────────────────────────────────────────────────
+
+/**
+ * Log in as admin. Backend checks ADMIN_USERNAME/ADMIN_PASSWORD env vars
+ * and issues an httpOnly admin_session cookie.
+ */
+export async function adminLogin(payload: AdminLoginRequest): Promise<void> {
+  await apiPost<{ ok: boolean }>("/api/admin/login", payload);
+}
+
+/**
+ * Clear the admin_session cookie (admin logout).
+ */
+export async function adminLogout(): Promise<void> {
+  await apiPost<{ ok: boolean }>("/api/admin/logout", {});
+}
+
+// ── Chat API call (Round 1) ───────────────────────────────────────────────────
+
+/**
+ * Sends a chat message to the Round 1 backend.
+ * team_id is NOT sent — the backend reads it from the session cookie.
  */
 export async function sendChatMessage(
   payload: ChatRequest
@@ -160,26 +217,52 @@ export async function sendChatMessage(
   return apiPost<ChatResponse>("/api/chat", payload);
 }
 
-// ── Admin API calls ───────────────────────────────────────────────────────────
+/**
+ * Fetch the chat history for a specific Round 1 stage.
+ */
+export async function fetchRound1History(stage: number): Promise<ChatLogEntry[]> {
+  return apiGet<ChatLogEntry[]>(`/api/round1/${stage}/history`);
+}
+
+// ── Round 2 API calls ─────────────────────────────────────────────────────────
+
+/**
+ * Send a message to the Round 2 continuous chat endpoint.
+ * The server tracks which stage the team is on — the caller never sends stage.
+ */
+export async function sendRound2ChatMessage(
+  payload: Round2ChatRequest,
+): Promise<Round2ChatResponse> {
+  return apiPost<Round2ChatResponse>("/api/round2/chat", payload);
+}
+
+/**
+ * Submit the final flag for Round 2.
+ * Returns { correct: true } if the flag matches Stage 5's DETECTION_STRING.
+ */
+export async function submitRound2Flag(
+  payload: Round2FlagRequest,
+): Promise<Round2FlagResponse> {
+  return apiPost<Round2FlagResponse>("/api/round2/submit-flag", payload);
+}
+
+// ── Admin data API calls ──────────────────────────────────────────────────────
 
 /**
  * Fetch live progress for every registered team.
- * Uses the VITE_ADMIN_SECRET env var as the X-Admin-Secret header value.
- * Returns an empty array when no teams have registered yet.
- * Throws an Error on 403 (wrong secret) or network failure.
+ * Sends both the admin_session cookie AND the legacy X-Admin-Secret header
+ * so both auth paths work depending on which is available.
  */
 export async function fetchAdminTeams(): Promise<AdminTeam[]> {
-  return apiGet<AdminTeam[]>("/api/admin/teams", ADMIN_SECRET);
+  return apiGet<AdminTeam[]>("/api/admin/teams", { "X-Admin-Secret": ADMIN_SECRET });
 }
 
 /**
  * Fetch the full chat_logs transcript for a single team, ordered by timestamp.
- * teamId is the team_name string (as stored in chat_logs.team_id).
- * Returns an empty array if the team has no chat history yet.
  */
 export async function fetchTeamLogs(teamId: string): Promise<ChatLogEntry[]> {
   return apiGet<ChatLogEntry[]>(
     `/api/admin/teams/${encodeURIComponent(teamId)}/logs`,
-    ADMIN_SECRET
+    { "X-Admin-Secret": ADMIN_SECRET },
   );
 }

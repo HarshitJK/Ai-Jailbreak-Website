@@ -1,52 +1,38 @@
-﻿import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import './campushelp.css';
+import { sendRound2ChatMessage, submitRound2Flag } from '../lib/apiClient';
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   sendRound2Message — isolated chat logic for easy future API wiring.
-
-   Current behaviour: local keyword matching (no network call).
-
-   TODO: replace this with a real API call to the round 2 backend endpoint.
-         When you do, keep the function signature identical:
-           async function sendRound2Message(text: string): Promise<string>
-         and remove the `replies` object + keyword matching below.
+   team_id is now derived from the httpOnly session cookie set at login.
+   No manual team_id field is needed.
 ───────────────────────────────────────────────────────────────────────────── */
-const REPLIES = {
-  library:   'The library is usually located in the main academic block. Check your campus notice board for the latest timings.',
-  events:    'You can find upcoming workshops, hackathons and student activities on the Events page.',
-  academics: 'I can help with courses, exams, departments and academic resources.',
-  transport: 'Campus transport information can include bus routes, pickup points and timings.',
-};
-
-async function sendRound2Message(text) {
-  // TODO: replace this with a real API call to the round 2 backend endpoint.
-  const lower = text.toLowerCase();
-  if (lower.includes('library'))                                                return REPLIES.library;
-  if (lower.includes('event') || lower.includes('hackathon'))                  return REPLIES.events;
-  if (lower.includes('exam') || lower.includes('course') || lower.includes('department')) return REPLIES.academics;
-  if (lower.includes('bus') || lower.includes('transport'))                    return REPLIES.transport;
-  if (lower.includes('hello') || lower.includes('hi'))                        return 'Hello! How can I help you today?';
-  return 'I can help with academics, the library, campus facilities, transport and events. Try asking about one of those.';
-}
 
 /* Suggested questions shown until the user sends their first message */
 const SUGGESTIONS = [
-  'What are the library hours?',
-  'When is the next campus event?',
-  'How do I find the bus schedule?',
+  'I need help with a support ticket.',
+  'Can you look up an account for me?',
+  'I have an HR question.',
 ];
 
 /* ─────────────────────────────────────────────────────────────────────────────
    Round2Page — mounts at /round-2 inside the main app router.
-   Intentionally keeps CampusHelp's plain portal look (no Prompt Heist theme).
+   Keeps CampusHelp's plain portal look (no Prompt Heist theme).
 ───────────────────────────────────────────────────────────────────────────── */
 export default function Round2Page() {
-  const [open, setOpen]         = useState(false);
-  const [input, setInput]       = useState('');
-  const [messages, setMessages] = useState([
-    { from: 'bot', text: 'Welcome to CampusHelp. How can I assist you today?' },
+  const [open, setOpen]             = useState(false);
+  const [input, setInput]           = useState('');
+  const [messages, setMessages]     = useState([
+    { from: 'bot', text: 'Welcome to Nova Dynamics Support. How can I assist you today?' },
   ]);
   const [pillsVisible, setPillsVisible] = useState(true);
+  const [loading, setLoading]       = useState(false);
+  const [currentStage, setCurrentStage] = useState(1);
+
+  // Flag submission state
+  const [flagInput, setFlagInput]   = useState('');
+  const [flagResult, setFlagResult] = useState(null); // null | 'correct' | 'wrong'
+  const [flagSubmitting, setFlagSubmitting] = useState(false);
+
   const bottomRef = useRef(null);
 
   /* Scroll to latest message whenever the list changes */
@@ -54,106 +40,203 @@ export default function Round2Page() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, open]);
 
-  /* Main send handler — unchanged logic, same signature as before */
+  /* Append a system-style status message to the chat */
+  function pushSystemMessage(text) {
+    setMessages(prev => [...prev, { from: 'system', text }]);
+  }
+
+  /* Main send handler */
   async function handleSend(e) {
     e.preventDefault();
     const text = input.trim();
-    if (!text) return;
+    if (!text || loading) return;
 
     setPillsVisible(false);
     setMessages(prev => [...prev, { from: 'user', text }]);
     setInput('');
+    setLoading(true);
 
-    const reply = await sendRound2Message(text);
-    setTimeout(() => {
-      setMessages(prev => [...prev, { from: 'bot', text: reply }]);
-    }, 350);
+    try {
+      const data = await sendRound2ChatMessage({ message: text });
+
+      setMessages(prev => [...prev, { from: 'bot', text: data.reply }]);
+
+      if (data.systemMessage) {
+        setTimeout(() => pushSystemMessage(data.systemMessage), 400);
+      }
+
+      if (data.currentStage !== currentStage) {
+        setCurrentStage(data.currentStage);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error — is the backend running?';
+      pushSystemMessage(`[Error] ${msg}`);
+    } finally {
+      setLoading(false);
+    }
   }
 
   /* Pills route through the same async logic without needing a form event */
   function handlePill(text) {
+    if (!teamId) {
+      setOpen(true);
+      return;
+    }
     setPillsVisible(false);
     setMessages(prev => [...prev, { from: 'user', text }]);
-    sendRound2Message(text).then(reply => {
-      setTimeout(() => {
-        setMessages(prev => [...prev, { from: 'bot', text: reply }]);
-      }, 350);
-    });
+    setLoading(true);
+
+    sendRound2ChatMessage({ message: text })
+      .then(data => {
+        setMessages(prev => [...prev, { from: 'bot', text: data.reply }]);
+        if (data.systemMessage) {
+          setTimeout(() => pushSystemMessage(data.systemMessage), 400);
+        }
+        if (data.currentStage !== currentStage) {
+          setCurrentStage(data.currentStage);
+        }
+      })
+      .catch(err => {
+        const msg = err instanceof Error ? err.message : 'Unknown error';
+        pushSystemMessage(`[Error] ${msg}`);
+      })
+      .finally(() => setLoading(false));
+  }
+
+  /* Flag submission */
+  async function handleFlagSubmit(e) {
+    e.preventDefault();
+    if (!flagInput.trim() || flagSubmitting) return;
+    setFlagSubmitting(true);
+    setFlagResult(null);
+    try {
+      const data = await submitRound2Flag({ flag: flagInput.trim() });
+      setFlagResult(data.correct ? 'correct' : 'wrong');
+    } catch (err) {
+      setFlagResult('error');
+    } finally {
+      setFlagSubmitting(false);
+    }
   }
 
   return (
     <div className="campushelp-root">
       <div className="site">
         <header className="nav">
-          <div className="logo">CampusHelp</div>
+          <div className="logo">Nova Dynamics</div>
           <nav>
             <a href="#home">Home</a>
-            <a href="#academics">Academics</a>
-            <a href="#campus">Campus</a>
-            <a href="#events">Events</a>
+            <a href="#academics">Services</a>
+            <a href="#campus">About</a>
+            <a href="#events">Contact</a>
           </nav>
-          <button className="nav-chat" onClick={() => setOpen(true)}>Ask us</button>
+          <button className="nav-chat" onClick={() => setOpen(true)}>Support Chat</button>
         </header>
 
         <main>
           <section className="hero" id="home">
             <div className="hero-copy">
-              <p className="eyebrow">STUDENT INFORMATION PORTAL</p>
-              <h1>Everything you need for campus life.</h1>
+              <p className="eyebrow">NOVA DYNAMICS INTERNAL PORTAL</p>
+              <h1>Your company support hub.</h1>
               <p className="hero-text">
-                Find useful information about academics, facilities, events and
-                everyday student life in one simple place.
+                Access HR, IT Helpdesk, and internal support resources in one place.
+                Chat with our AI assistant for instant answers.
               </p>
-              <button className="primary" onClick={() => setOpen(true)}>Ask CampusHelp</button>
+              <button className="primary" onClick={() => setOpen(true)}>Open Support Chat</button>
             </div>
             <div className="hero-note">
-              <span>01</span>
-              <p>Quick answers<br />without the searching.</p>
+              <span>R2</span>
+              <p>Nova Dynamics<br />Internal Systems.</p>
             </div>
           </section>
 
           <section className="intro">
-            <p className="section-label">EXPLORE</p>
-            <h2>What can I help you with?</h2>
-            <p className="muted">Choose a section or ask the chatbot directly.</p>
+            <p className="section-label">SUPPORT CHANNELS</p>
+            <h2>What can we help you with?</h2>
+            <p className="muted">Use the chat assistant or browse the sections below.</p>
 
             <div className="feature-grid">
               <article id="academics">
                 <span>01</span>
-                <h3>Academics</h3>
-                <p>Courses, departments, exams and academic resources.</p>
-                <button onClick={() => setOpen(true)}>Ask about academics →</button>
+                <h3>General Support</h3>
+                <p>Company FAQs, ticket status, and facilities information.</p>
+                <button onClick={() => setOpen(true)}>Ask Support →</button>
               </article>
               <article id="campus">
                 <span>02</span>
-                <h3>Campus</h3>
-                <p>Library, labs, transport and other campus facilities.</p>
-                <button onClick={() => setOpen(true)}>Ask about campus →</button>
+                <h3>HR Assistance</h3>
+                <p>Employee records, usernames, and HR requests.</p>
+                <button onClick={() => setOpen(true)}>Ask HR →</button>
               </article>
               <article id="events">
                 <span>03</span>
-                <h3>Events</h3>
-                <p>Workshops, hackathons, clubs and student activities.</p>
-                <button onClick={() => setOpen(true)}>Ask about events →</button>
+                <h3>IT Helpdesk</h3>
+                <p>Password resets, access requests, and credential support.</p>
+                <button onClick={() => setOpen(true)}>Ask IT →</button>
               </article>
             </div>
           </section>
 
-          <section className="bottom-info">
+          {/* Flag submission section — always visible */}
+          <section className="bottom-info" id="flag-submit">
             <div>
-              <p className="section-label">CAMPUSHELP</p>
-              <h2>A small tool for everyday questions.</h2>
+              <p className="section-label">ROUND 2 FLAG</p>
+              <h2>Found the master flag?</h2>
             </div>
-            <p>
-              This starter version uses a simple local chatbot. Later, we can
-              connect it to your own college information or an AI API.
-            </p>
+            <form
+              onSubmit={handleFlagSubmit}
+              style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginTop: '1rem' }}
+            >
+              <input
+                type="text"
+                value={flagInput}
+                onChange={e => setFlagInput(e.target.value)}
+                placeholder="Enter flag (e.g. NOVA_MASTER_FLAG_2026)"
+                aria-label="Flag submission input"
+                style={{
+                  flex: '1 1 260px',
+                  padding: '0.6rem 1rem',
+                  borderRadius: '8px',
+                  border: '1.5px solid #ccc',
+                  fontSize: '0.95rem',
+                  minWidth: 0,
+                }}
+              />
+              <button
+                type="submit"
+                className="primary"
+                disabled={!flagInput.trim() || flagSubmitting}
+                style={{ whiteSpace: 'nowrap' }}
+              >
+                {flagSubmitting ? 'Checking…' : 'Submit Flag'}
+              </button>
+            </form>
+            {flagResult === 'correct' && (
+              <p style={{ marginTop: '0.75rem', color: '#16a34a', fontWeight: 600 }}>
+                ✓ Correct! You've completed Round 2.
+              </p>
+            )}
+            {flagResult === 'wrong' && (
+              <p style={{ marginTop: '0.75rem', color: '#dc2626', fontWeight: 600 }}>
+                ✗ Incorrect flag — keep exploring.
+              </p>
+            )}
+            {flagResult === 'noteamid' && (
+              <p style={{ marginTop: '0.75rem', color: '#d97706', fontWeight: 600 }}>
+                ⚠ Enter your Team ID first (open the chat).
+              </p>
+            )}
+            {flagResult === 'error' && (
+              <p style={{ marginTop: '0.75rem', color: '#dc2626' }}>
+                Network error — is the backend running?
+              </p>
+            )}
           </section>
         </main>
 
         <footer>
-          <span>CampusHelp</span>
-          <span>Student Information Portal</span>
+          <span>Nova Dynamics</span>
+          <span>Internal Support Portal</span>
         </footer>
 
         {/* Launcher button */}
@@ -176,16 +259,16 @@ export default function Round2Page() {
 
         {/* Chat panel */}
         {open && (
-          <div className="ch-panel" role="dialog" aria-label="CampusHelp support chat">
+          <div className="ch-panel" role="dialog" aria-label="Nova Dynamics support chat">
 
             {/* Header */}
             <div className="ch-panel__header">
-              <div className="ch-panel__avatar" aria-hidden="true">CH</div>
+              <div className="ch-panel__avatar" aria-hidden="true">ND</div>
               <div className="ch-panel__identity">
-                <span className="ch-panel__name">CampusHelp Assistant</span>
+                <span className="ch-panel__name">Nova Dynamics Support</span>
                 <span className="ch-panel__sub">
                   <span className="ch-panel__dot" aria-hidden="true"></span>
-                  Student Support
+                  Stage {currentStage} / 5
                 </span>
               </div>
               <button
@@ -199,10 +282,19 @@ export default function Round2Page() {
               </button>
             </div>
 
+            {/* Team ID input removed — session cookie now identifies the team */}
+
             {/* Message list */}
             <div className="ch-panel__messages">
               {messages.map((m, i) => (
-                <div key={i} className={"ch-bubble ch-bubble--" + m.from}>
+                <div
+                  key={i}
+                  className={
+                    m.from === 'system'
+                      ? 'ch-system-msg'
+                      : 'ch-bubble ch-bubble--' + m.from
+                  }
+                >
                   {m.text}
                 </div>
               ))}
@@ -214,6 +306,12 @@ export default function Round2Page() {
                       {s}
                     </button>
                   ))}
+                </div>
+              )}
+
+              {loading && (
+                <div className="ch-bubble ch-bubble--bot" style={{ opacity: 0.5 }}>
+                  Thinking…
                 </div>
               )}
 
@@ -231,14 +329,15 @@ export default function Round2Page() {
                 className="ch-panel__input"
                 value={input}
                 onChange={e => setInput(e.target.value)}
-                placeholder="Type your question..."
+                placeholder="Type your question…"
                 aria-label="Chat message"
+                disabled={loading}
               />
               <button
                 type="submit"
                 className="ch-panel__send"
                 aria-label="Send message"
-                disabled={!input.trim()}
+                disabled={!input.trim() || loading}
               >
                 <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
                   <path d="M2 9l14-7-5 7 5 7L2 9z"

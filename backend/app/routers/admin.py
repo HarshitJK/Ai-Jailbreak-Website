@@ -1,32 +1,82 @@
 """
-GET /api/admin/teams             — live progress for every team (teams collection)
-GET /api/admin/teams/{team_id}/logs — full chat history for a team (chat_logs collection)
+Admin router.
 
-Both routes are protected by the ADMIN_SECRET environment variable.  The caller
-must send the matching value in the X-Admin-Secret request header; any mismatch
-returns HTTP 403.
+Authentication:
+  POST /api/admin/login  — verifies ADMIN_USERNAME/ADMIN_PASSWORD from env,
+                           issues a signed httpOnly `admin_session` JWT cookie.
+  POST /api/admin/logout — clears that cookie.
+
+All other /api/admin/* routes are protected by get_current_admin (cookie dependency).
+The old X-Admin-Secret header guard (verify_admin) is kept for backwards compatibility
+with any direct API tooling, but cookie auth takes precedence on the data routes.
+
+GET  /api/admin/teams                    — live progress for every team
+GET  /api/admin/teams/{team_id}/logs     — full chat history for a team
 """
 
 import os
 from typing import List, Optional
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from pydantic import BaseModel
 
 from app.db import get_db
+from app.services.jwt_auth import (
+    get_current_admin,
+    issue_admin_cookie,
+    clear_admin_cookie,
+)
 
 router = APIRouter()
 
 
-# ── Admin-auth dependency ─────────────────────────────────────────────────────
+# ── Admin login request model ─────────────────────────────────────────────────
 
-def verify_admin(x_admin_secret: Optional[str] = Header(default=None)) -> None:
+class AdminLoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+# ── Admin login / logout ──────────────────────────────────────────────────────
+
+@router.post("/api/admin/login")
+async def admin_login(payload: AdminLoginRequest, response: Response):
     """
-    Dependency that checks the X-Admin-Secret header against the ADMIN_SECRET
-    environment variable.  Raises HTTP 403 on any mismatch or if the env var
-    is not configured.
+    Verify admin credentials against ADMIN_USERNAME / ADMIN_PASSWORD env vars.
+    Issues a signed httpOnly `admin_session` JWT cookie valid for 8 hours.
+    """
+    expected_username = os.getenv("ADMIN_USERNAME", "")
+    expected_password = os.getenv("ADMIN_PASSWORD", "")
+
+    if not expected_username or not expected_password:
+        raise HTTPException(
+            status_code=503,
+            detail="Admin credentials are not configured on this server.",
+        )
+
+    if payload.username != expected_username or payload.password != expected_password:
+        raise HTTPException(status_code=401, detail="Invalid admin credentials.")
+
+    issue_admin_cookie(response)
+    return {"ok": True}
+
+
+@router.post("/api/admin/logout")
+async def admin_logout(response: Response):
+    """Clear the admin_session cookie. Always returns 200."""
+    clear_admin_cookie(response)
+    return {"ok": True}
+
+
+# ── Legacy header-based guard (kept for direct API tooling) ───────────────────
+
+def verify_admin_header(x_admin_secret: Optional[str] = Header(default=None)) -> None:
+    """
+    Legacy dependency: checks X-Admin-Secret header.
+    Still accepted by the data routes so that existing scripts keep working.
+    Kept as a fallback — not the primary auth path (cookie is preferred).
     """
     expected = os.getenv("ADMIN_SECRET", "")
     if not expected:
@@ -39,6 +89,31 @@ def verify_admin(x_admin_secret: Optional[str] = Header(default=None)) -> None:
             status_code=403,
             detail="Invalid or missing admin secret.",
         )
+
+
+def _require_admin(request: Request, x_admin_secret: Optional[str] = Header(default=None)) -> None:
+    """
+    Combined guard: accept either a valid admin_session cookie OR a valid X-Admin-Secret header.
+    This lets both the browser (cookie) and API scripts (header) work.
+    """
+    # Try cookie first
+    from app.services.jwt_auth import ADMIN_COOKIE_NAME, _decode
+    from jose import JWTError
+    token = request.cookies.get(ADMIN_COOKIE_NAME)
+    if token:
+        try:
+            payload = _decode(token)
+            if payload.get("role") == "admin":
+                return  # cookie auth OK
+        except (JWTError, Exception):
+            pass  # fall through to header check
+
+    # Fall back to header
+    expected = os.getenv("ADMIN_SECRET", "")
+    if expected and x_admin_secret == expected:
+        return  # header auth OK
+
+    raise HTTPException(status_code=401, detail="Admin authentication required.")
 
 
 # ── Response models ───────────────────────────────────────────────────────────
@@ -78,15 +153,18 @@ class ChatLogRow(BaseModel):
 @router.get(
     "/api/admin/teams",
     response_model=List[AdminTeamRow],
-    dependencies=[Depends(verify_admin)],
 )
 async def list_teams(
+    request: Request,
+    x_admin_secret: Optional[str] = Header(default=None),
     db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> List[AdminTeamRow]:
     """
     Return every team's live progress, sorted by team_name ascending.
     Returns an empty list (not an error) when no teams have registered yet.
     """
+    _require_admin(request, x_admin_secret)
+
     cursor = db["teams"].find(
         {},
         {
@@ -120,10 +198,11 @@ async def list_teams(
 @router.get(
     "/api/admin/teams/{team_id}/logs",
     response_model=List[ChatLogRow],
-    dependencies=[Depends(verify_admin)],
 )
 async def get_team_logs(
     team_id: str,
+    request: Request,
+    x_admin_secret: Optional[str] = Header(default=None),
     db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> List[ChatLogRow]:
     """
@@ -131,6 +210,8 @@ async def get_team_logs(
     ordered chronologically (timestamp ascending).
     Returns an empty list if the team has no chat history yet.
     """
+    _require_admin(request, x_admin_secret)
+
     cursor = db["chat_logs"].find(
         {"team_id": team_id},
         {

@@ -12,7 +12,7 @@ from pydantic import BaseModel
 # ── Chat models (unchanged — frontend contract preserved) ─────────────────────
 
 class ChatRequest(BaseModel):
-    team_id: str
+    team_id: Optional[str] = None  # ignored — team identity now comes from session cookie
     stage: int  # 0-indexed: 0 = Stage 1 … 4 = Stage 5
     message: str
 

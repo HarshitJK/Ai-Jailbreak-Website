@@ -6,11 +6,62 @@ import "./party.css";
 import { launchPartyEffect } from "./party.js";
 
 import LoginPage, { overview } from "./pages/LoginPage";
-import { sendChatMessage, registerTeam, loginTeam } from "./lib/apiClient";
+import { sendChatMessage, registerTeam, loginTeam, logoutTeam, getMe, adminLogin, adminLogout, fetchRound1History } from "./lib/apiClient";
 import Round1Page, { challenges, Brand } from "./pages/Round1Page";
 import AdminPage, { AdminLoginPage } from "./pages/AdminPage";
 import Round2Page from "./round2/Round2Page";
 
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ProtectedRoute — calls GET /api/me on mount; if 401 → redirects to /login.
+   Passes teamName down to the wrapped page so it can display it.
+═══════════════════════════════════════════════════════════════════════════ */
+function ProtectedRoute({ children, onTeamName }) {
+  const [status, setStatus] = useState("loading"); // "loading" | "ok" | "unauth"
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    getMe()
+      .then((data) => {
+        if (onTeamName) onTeamName(data.team_name);
+        setStatus("ok");
+      })
+      .catch(() => {
+        setStatus("unauth");
+        navigate("/login", { replace: true });
+      });
+  }, []);
+
+  if (status === "loading") return null; // or a spinner
+  if (status === "unauth") return null;
+  return children;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   AdminProtectedRoute — calls GET /api/admin/teams as a lightweight probe;
+   if 401 → redirects to /admin/login.
+═══════════════════════════════════════════════════════════════════════════ */
+function AdminProtectedRoute({ children }) {
+  const [status, setStatus] = useState("loading");
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    // Probe the admin session by hitting the teams endpoint.
+    // We don't use /api/me here because that's the player session.
+    import("./lib/apiClient").then(({ fetchAdminTeams }) => {
+      fetchAdminTeams()
+        .then(() => setStatus("ok"))
+        .catch(() => {
+          setStatus("unauth");
+          navigate("/admin/login", { replace: true });
+        });
+    });
+  }, []);
+
+  if (status === "loading") return null;
+  if (status === "unauth") return null;
+  return children;
+}
 
 /* ═══════════════════════════════════════════════════════════════════════════
    APP — routing + shared state
@@ -24,14 +75,13 @@ function App() {
   const [storedAccount, setStoredAccount] = useState(null);
   const [completed, setCompleted]         = useState([]);
   const [active, setActive]               = useState(0);
-  const [messages, setMessages]           = useState([]);
+  const [messagesByStage, setMessagesByStage] = useState({}); // Stores chat logs keyed by challenge index
   const [input, setInput]                 = useState("");
   const [loading, setLoading]             = useState(false);
   const [mobileNav, setMobileNav]         = useState(false);
   const [error, setError]                 = useState("");
   const [loginAttempts, setLoginAttempts]         = useState(0);
   const [loginLockoutUntil, setLoginLockoutUntil] = useState(null);
-  const [adminAuthenticated, setAdminAuthenticated] = useState(false);
   const navigate = useNavigate();
 
   const progress = completed.length;
@@ -45,12 +95,37 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (participantAuthenticated && messages.length === 0) {
-      setMessages([{
-        id: "control-0",
-        side: "control",
-        text: `Challenge ${String(active + 1).padStart(2, "0")}: ${challenges[active].title}\n\n${challenges[active].goal}`
-      }]);
+    if (participantAuthenticated) {
+      setLoading(true);
+      fetchRound1History(active)
+        .then((logs) => {
+          if (logs.length === 0) {
+            setMessagesByStage(prev => ({
+              ...prev,
+              [active]: [{
+                id: "control-0",
+                side: "control",
+                text: `Challenge ${String(active + 1).padStart(2, "0")}: ${challenges[active].title}\n\n${challenges[active].goal}`
+              }]
+            }));
+          } else {
+            const mapped = logs.map((log, i) => ({
+              id: `log-${i}`,
+              side: log.role === "user" ? "user" : "control",
+              text: log.message
+            }));
+            setMessagesByStage(prev => ({
+              ...prev,
+              [active]: mapped
+            }));
+          }
+        })
+        .catch((err) => {
+          console.error("Failed to load history:", err);
+        })
+        .finally(() => {
+          setLoading(false);
+        });
     }
   }, [active, participantAuthenticated]);
 
@@ -85,6 +160,8 @@ function App() {
     try {
       setLoading(true);
       const auth = await loginTeam({ team_name: team.trim(), password });
+      // Backend sets the httpOnly session cookie automatically.
+      // Keep a localStorage entry so the team name is available for display.
       const account = { team: auth.team_name, session_token: auth.session_token };
       localStorage.setItem("prompt-heist-auth", JSON.stringify(account));
       setStoredAccount(account);
@@ -116,19 +193,24 @@ function App() {
     if (!value || loading || currentDone) return;
 
     const userMsg = { id: Date.now(), side: "user", text: value };
-    setMessages((m) => [...m, userMsg]);
+    setMessagesByStage((prev) => ({
+      ...prev,
+      [active]: [...(prev[active] || []), userMsg]
+    }));
     setInput("");
     setLoading(true);
 
     try {
-      const teamId = storedAccount?.team ?? "unknown";  // team_name string — unchanged API contract
+      // team_id no longer sent — backend reads it from the session cookie
       const { reply, stageComplete, nextStage } = await sendChatMessage({
-        team_id: teamId,
         stage: active,   // 0-indexed — backend translates to 1-indexed
         message: value,
       });
 
-      setMessages((m) => [...m, { id: Date.now() + 1, side: "control", text: reply }]);
+      setMessagesByStage((prev) => ({
+        ...prev,
+        [active]: [...(prev[active] || []), { id: Date.now() + 1, side: "control", text: reply }]
+      }));
 
       if (stageComplete) {
         const nextCompleted = [...new Set([...completed, active])].sort((a, b) => a - b);
@@ -144,26 +226,28 @@ function App() {
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unknown error — is the backend running?";
-      setMessages((m) => [
-        ...m,
-        { id: Date.now() + 2, side: "control", text: `[Error] ${msg}` },
-      ]);
+      setMessagesByStage((prev) => ({
+        ...prev,
+        [active]: [...(prev[active] || []), { id: Date.now() + 2, side: "control", text: `[Error] ${msg}` }]
+      }));
     } finally {
       setLoading(false);
     }
   }
 
-  function logout() {
+  async function logout() {
+    // Call backend to clear the httpOnly session cookie
+    try { await logoutTeam(); } catch (_) { /* ignore network errors on logout */ }
+
     setParticipantAuthenticated(false);
     setAuthMode("login");
     setPassword("");
     setInput("");
     setCompleted([]);
     setActive(0);
-    setMessages([]);
+    setMessagesByStage({});
     setMobileNav(false);
     setStoredAccount(null);
-    // Clear both old and new localStorage keys
     localStorage.removeItem("prompt-heist-auth");
     localStorage.removeItem("prompt-heist-account");
     navigate("/login");
@@ -189,20 +273,28 @@ function App() {
           />
         } />
         <Route path="/round-1" element={
-          participantAuthenticated ? (
+          <ProtectedRoute onTeamName={(name) => setStoredAccount(a => ({ ...a, team: name }))}>
             <Round1Page
               team={storedAccount?.team || "Team"} progress={progress} completed={completed}
-              active={active} messages={messages} input={input} setInput={setInput}
+              active={active} messages={messagesByStage[active] || []} input={input} setInput={setInput}
               loading={loading} currentDone={currentDone} allDone={allDone}
               mobileNav={mobileNav} setMobileNav={setMobileNav}
               jumpToChallenge={jumpToChallenge} submitPrompt={submitPrompt} logout={logout}
               onProceed={() => navigate("/round-2")}
             />
-          ) : <Navigate to="/login" replace />
+          </ProtectedRoute>
         } />
-        <Route path="/round-2" element={<Round2Page />} />
-        <Route path="/admin/login" element={<AdminLoginPage setAdminAuthenticated={setAdminAuthenticated} />} />
-        <Route path="/admin/*" element={adminAuthenticated ? <AdminPage /> : <Navigate to="/admin/login" replace />} />
+        <Route path="/round-2" element={
+          <ProtectedRoute>
+            <Round2Page />
+          </ProtectedRoute>
+        } />
+        <Route path="/admin/login" element={<AdminLoginPage />} />
+        <Route path="/admin/*" element={
+          <AdminProtectedRoute>
+            <AdminPage />
+          </AdminProtectedRoute>
+        } />
       </Routes>
     </div>
   );

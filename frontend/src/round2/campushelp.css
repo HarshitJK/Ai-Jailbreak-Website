@@ -372,6 +372,21 @@
   border-bottom-right-radius: 3px;
 }
 
+/* System / transition messages (stage advances, errors) */
+.campushelp-root .ch-system-msg {
+  align-self: center;
+  background: #f0f4ff;
+  color: #4b5563;
+  border: 1px solid #c7d2fe;
+  border-radius: 8px;
+  padding: 7px 14px;
+  font-size: 11.5px;
+  font-style: italic;
+  line-height: 1.5;
+  text-align: center;
+  max-width: 90%;
+}
+
 /* Suggested-question pills */
 .campushelp-root .ch-pills {
   display: flex;
