@@ -25,7 +25,7 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { fetchAdminTeams, fetchTeamLogs, adminLogin, adminLogout } from "../lib/apiClient";
+import { fetchAdminTeams, fetchTeamLogs, adminLogin, adminLogout, adminAdvanceTeam } from "../lib/apiClient";
 
 // ── Small shared UI atoms ─────────────────────────────────────────────────────
 
@@ -200,78 +200,10 @@ function AdminDashboard({ formatTimer, remaining, teams }) {
   );
 }
 
-function AdminTeams({ teams }) {
-  if (teams.length === 0) return <EmptyTeamsState />;
-  return (
-    <section className="admin-panel">
-      <SectionTitle kicker="TEAM MANAGEMENT" title="Registered teams" />
-      <div className="table-wrap">
-        <table className="admin-table simple">
-          <thead><tr><th>TEAM NAME</th><th>EMAIL</th></tr></thead>
-          <tbody>
-            {teams.map((team) => (
-              <tr key={team.team_name}>
-                <td>{team.team_name}</td>
-                <td className="email-cell">{team.email}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  );
-}
-
-function AdminRound1({ teams, selected, toggleEligible, qualified, openQualificationConfirm, round2Unlocked }) {
-  const totalTeams = teams.length;
-  // Completed = round1_complete_at is set (all 5 stages done)
+function AdminRound1Qualification({ teams, selected, toggleEligible, qualified, openQualificationConfirm, round2Unlocked }) {
   const completedTeams = teams.filter((t) => t.round1_complete_at != null);
 
-  // Derive a stable "id" from team_name for selection logic
   return (
-    <>
-      <section className="admin-panel">
-        <SectionTitle kicker="ROUND 1" title="Round 1 monitoring" />
-        <div className="round-summary">
-          <ControlValue label="ROUND 1 STATUS" value={completedTeams.length > 0 ? "IN PROGRESS / COMPLETE" : "NOT STARTED"} />
-          <ControlValue label="TOTAL TEAMS" value={totalTeams} />
-          {/* NOTE: denominator is totalTeams (live), not a hardcoded 8 */}
-          <ControlValue label="COMPLETED" value={`${completedTeams.length} / ${totalTeams}`} />
-          <ControlValue label="QUALIFIED" value={`${qualified.length} / ${completedTeams.length}`} />
-        </div>
-        {teams.length === 0 ? (
-          <EmptyTeamsState />
-        ) : (
-          <div className="table-wrap">
-            <table className="admin-table">
-              {/*
-               * SCHEMA NOTE: No "r1Challenges" field exists in MongoDB.
-               * round1_stage (0-5) is the closest equivalent and is displayed as "X / 5".
-               * round1_complete_at (UTC datetime) is shown instead of an elapsed duration.
-               */}
-              <thead><tr><th>TEAM</th><th>STAGES COMPLETED</th><th>COMPLETION TIME</th></tr></thead>
-              <tbody>
-                {teams.map((team) => {
-                  const done = team.round1_complete_at != null;
-                  return (
-                    <tr key={team.team_name}>
-                      <td>{team.team_name}</td>
-                      <td>
-                        <span className={done ? "table-ok" : ""}>
-                          {team.round1_stage} / 5
-                        </span>
-                      </td>
-                      {/* round1_complete_at is a UTC datetime — displayed as local time */}
-                      <td>{fmtTimestamp(team.round1_complete_at)}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-
       <section className="admin-panel">
         <SectionTitle kicker="ROUND 2 QUALIFICATION" title="Select completed teams" />
         <p className="panel-note">Only teams that completed Round 1 can be selected.</p>
@@ -309,7 +241,6 @@ function AdminRound1({ teams, selected, toggleEligible, qualified, openQualifica
           <button className="admin-btn primary" disabled={!selected.length || round2Unlocked} onClick={openQualificationConfirm}>Confirm Qualified Teams</button>
         </div>
       </section>
-    </>
   );
 }
 
@@ -347,21 +278,37 @@ function AdminTranscript({ teams, transcriptTeam, setTranscriptTeam }) {
     loadLogs(transcriptTeam);
   }, [transcriptTeam, loadLogs]);
 
-  // Group logs by round then stage for readable display
-  const grouped = [];
+  // Group logs by round then stage
+  const r1Groups = [];
+  const r2Groups = [];
+  
   if (logs && logs.length > 0) {
-    let currentKey = null;
-    let currentGroup = null;
+    let currentR1Stage = null;
+    let currentR1Group = null;
+    let currentR2Stage = null;
+    let currentR2Group = null;
+    
     for (const entry of logs) {
-      const key = `${entry.round}-${entry.stage}`;
-      if (key !== currentKey) {
-        currentGroup = { round: entry.round, stage: entry.stage, messages: [] };
-        grouped.push(currentGroup);
-        currentKey = key;
+      if (entry.round === 1) {
+        if (entry.stage !== currentR1Stage) {
+          currentR1Group = { stage: entry.stage, messages: [] };
+          r1Groups.push(currentR1Group);
+          currentR1Stage = entry.stage;
+        }
+        currentR1Group.messages.push(entry);
+      } else {
+        if (entry.stage !== currentR2Stage) {
+          currentR2Group = { stage: entry.stage, messages: [] };
+          r2Groups.push(currentR2Group);
+          currentR2Stage = entry.stage;
+        }
+        currentR2Group.messages.push(entry);
       }
-      currentGroup.messages.push(entry);
     }
   }
+
+  const [activeR1Tab, setActiveR1Tab] = useState(1);
+  const [activeRoundTab, setActiveRoundTab] = useState(1);
 
   return (
     <section className="admin-panel chat-monitor">
@@ -391,10 +338,13 @@ function AdminTranscript({ teams, transcriptTeam, setTranscriptTeam }) {
                 <strong>{transcriptTeam || "Select a team"}</strong>
                 <span>Chat transcript (chat_logs)</span>
               </div>
-              <span className="admin-only-badge">ADMIN ACCESS</span>
+              <div style={{display: 'flex', gap: '0.5rem'}}>
+                <button className={`admin-btn ${activeRoundTab === 1 ? 'primary' : 'secondary'}`} onClick={() => setActiveRoundTab(1)}>Round 1</button>
+                <button className={`admin-btn ${activeRoundTab === 2 ? 'primary' : 'secondary'}`} onClick={() => setActiveRoundTab(2)}>Round 2</button>
+              </div>
             </div>
 
-            <div className="admin-messages">
+            <div className="admin-messages" style={{ display: 'flex', flexDirection: 'column' }}>
               {logsLoading && (
                 <div className="admin-transcript-loading">
                   <LoadingState />
@@ -414,24 +364,67 @@ function AdminTranscript({ teams, transcriptTeam, setTranscriptTeam }) {
                 </div>
               )}
 
-              {!logsLoading && !logsError && grouped.map((group, gi) => (
-                <div key={gi} className="transcript-group">
-                  <div className="transcript-group-header">
-                    Round {group.round} — Stage {group.stage}
+              {/* ROUND 1 RENDER: Collapsible / Tabbed */}
+              {!logsLoading && !logsError && activeRoundTab === 1 && r1Groups.length > 0 && (
+                <>
+                  <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+                    {r1Groups.map(g => (
+                      <button 
+                        key={g.stage} 
+                        className={`admin-btn ${activeR1Tab === g.stage ? 'primary' : 'secondary'}`}
+                        onClick={() => setActiveR1Tab(g.stage)}
+                      >
+                        Stage {g.stage}
+                      </button>
+                    ))}
                   </div>
-                  {group.messages.map((msg, mi) => (
-                    <div
-                      key={mi}
-                      className={`admin-message${msg.role === "assistant" ? " control" : ""}`}
-                    >
-                      <span>
-                        {fmtTimestamp(msg.timestamp)} — {msg.role === "assistant" ? "CHALLENGE CONTROL" : transcriptTeam}
-                      </span>
-                      <p>{msg.message}</p>
+                  {r1Groups.filter(g => g.stage === activeR1Tab).map((group, gi) => (
+                    <div key={gi} className="transcript-group">
+                      {group.messages.map((msg, mi) => (
+                        <div
+                          key={mi}
+                          className={`admin-message${msg.role === "assistant" ? " control" : msg.role === "system" ? " system" : ""}`}
+                        >
+                          <span>
+                            {fmtTimestamp(msg.timestamp)} — {msg.role === "assistant" ? "CHALLENGE CONTROL" : msg.role === "system" ? "SYSTEM" : transcriptTeam}
+                          </span>
+                          <p>{msg.message}</p>
+                        </div>
+                      ))}
                     </div>
                   ))}
+                </>
+              )}
+              {!logsLoading && !logsError && activeRoundTab === 1 && r1Groups.length === 0 && logs !== null && logs.length > 0 && (
+                <p>No Round 1 logs.</p>
+              )}
+
+              {/* ROUND 2 RENDER: Continuous thread with dividers */}
+              {!logsLoading && !logsError && activeRoundTab === 2 && r2Groups.length > 0 && (
+                <div className="transcript-group">
+                  {r2Groups.map((group, gi) => (
+                    <React.Fragment key={gi}>
+                      <div className="transcript-group-header" style={{ margin: '1rem 0', padding: '0.5rem', background: 'rgba(255,255,255,0.1)', textAlign: 'center', fontWeight: 'bold' }}>
+                        --- Transition to Stage {group.stage} ---
+                      </div>
+                      {group.messages.map((msg, mi) => (
+                        <div
+                          key={`${gi}-${mi}`}
+                          className={`admin-message${msg.role === "assistant" ? " control" : msg.role === "system" ? " system" : ""}`}
+                        >
+                          <span>
+                            {fmtTimestamp(msg.timestamp)} — {msg.role === "assistant" ? "CHALLENGE CONTROL" : msg.role === "system" ? "SYSTEM" : transcriptTeam}
+                          </span>
+                          <p>{msg.message}</p>
+                        </div>
+                      ))}
+                    </React.Fragment>
+                  ))}
                 </div>
-              ))}
+              )}
+              {!logsLoading && !logsError && activeRoundTab === 2 && r2Groups.length === 0 && logs !== null && logs.length > 0 && (
+                <p>No Round 2 logs.</p>
+              )}
             </div>
 
             <div className="admin-chat-note">Admin-only monitoring view. Data from chat_logs collection.</div>
@@ -442,25 +435,18 @@ function AdminTranscript({ teams, transcriptTeam, setTranscriptTeam }) {
   );
 }
 
-function AdminLeaderboard({ teams, qualified, unlocked }) {
+function AdminLeaderboard({ teams, qualified, unlocked, onSelectTeam }) {
   if (teams.length === 0) return (
     <section className="admin-panel">
-      <SectionTitle kicker="LEADERBOARD" title="Live leaderboard" />
+      <SectionTitle kicker="TEAMS & LEADERBOARD" title="Live leaderboard" />
       <EmptyTeamsState />
     </section>
   );
 
-  /*
-   * SCHEMA NOTE: No r1Challenges / r2Challenges fields. We sort by round1_stage
-   * (stages completed, 0-5) descending, then by round1_complete_at ascending
-   * (earlier completion = better rank).  round2_stage used for Round 2 column.
-   * There is no "time" elapsed field — round1_complete_at datetime is displayed.
-   */
   const rows = [...teams].sort((a, b) => {
     const aStages = a.round1_stage + (unlocked && qualified.includes(a.team_name) ? a.round2_stage : 0);
     const bStages = b.round1_stage + (unlocked && qualified.includes(b.team_name) ? b.round2_stage : 0);
     if (bStages !== aStages) return bStages - aStages;
-    // Tiebreak: earlier completion first; if neither completed, keep order
     if (a.round1_complete_at && b.round1_complete_at) {
       return new Date(a.round1_complete_at) - new Date(b.round1_complete_at);
     }
@@ -469,23 +455,30 @@ function AdminLeaderboard({ teams, qualified, unlocked }) {
 
   return (
     <section className="admin-panel">
-      <SectionTitle kicker="LEADERBOARD" title="Live leaderboard" />
+      <SectionTitle kicker="TEAMS & LEADERBOARD" title="Live leaderboard" />
+      <p className="panel-note">Click any team row to view detailed status and manual advance controls.</p>
       <div className="table-wrap">
         <table className="admin-table">
-          {/* NOTE: columns use "stages" (0-5) not "challenges" (no such field) */}
-          <thead><tr><th>RANK</th><th>TEAM</th><th>R1 STAGES</th><th>R2 STAGES</th><th>TOTAL</th><th>R1 COMPLETED AT</th></tr></thead>
+          <thead><tr><th>RANK</th><th>TEAM</th><th>R1 STAGES</th><th>R2 STAGES</th><th>TOTAL</th><th>STATUS</th></tr></thead>
           <tbody>
             {rows.map((team, i) => {
+              const done = team.round1_complete_at != null;
               const r2 = unlocked && qualified.includes(team.team_name) ? team.round2_stage : null;
               const total = team.round1_stage + (r2 !== null ? r2 : 0);
+              const status = unlocked && qualified.includes(team.team_name)
+                ? <span className="table-ok">QUALIFIED</span>
+                : done
+                  ? "ROUND 1 COMPLETE"
+                  : <span className="muted-cell">IN PROGRESS</span>;
+              
               return (
-                <tr key={team.team_name}>
+                <tr key={team.team_name} onClick={() => onSelectTeam(team)} style={{cursor: 'pointer'}} className="hover-row">
                   <td>#{i + 1}</td>
                   <td>{team.team_name}</td>
                   <td>{team.round1_stage}/5</td>
                   <td>{r2 !== null ? `${r2}/5` : "—"}</td>
                   <td>{total}</td>
-                  <td>{fmtTimestamp(team.round1_complete_at)}</td>
+                  <td>{status}</td>
                 </tr>
               );
             })}
@@ -496,53 +489,68 @@ function AdminLeaderboard({ teams, qualified, unlocked }) {
   );
 }
 
-function AdminResults({ teams, qualified, unlocked }) {
-  if (teams.length === 0) return (
-    <section className="admin-panel">
-      <SectionTitle kicker="FINAL RESULTS" title="Results" />
-      <EmptyTeamsState />
-    </section>
-  );
-
-  const rows = [...teams].sort((a, b) => {
-    const aStages = a.round1_stage + (unlocked && qualified.includes(a.team_name) ? a.round2_stage : 0);
-    const bStages = b.round1_stage + (unlocked && qualified.includes(b.team_name) ? b.round2_stage : 0);
-    if (bStages !== aStages) return bStages - aStages;
-    if (a.round1_complete_at && b.round1_complete_at) {
-      return new Date(a.round1_complete_at) - new Date(b.round1_complete_at);
-    }
-    return a.round1_complete_at ? -1 : b.round1_complete_at ? 1 : 0;
-  });
+function TeamDetailsModal({ team, onClose, onAdvance }) {
+  if (!team) return null;
 
   return (
-    <section className="admin-panel">
-      <SectionTitle kicker="FINAL RESULTS" title="Results" />
-      <div className="table-wrap">
-        <table className="admin-table">
-          <thead><tr><th>RANK</th><th>TEAM</th><th>R1 STAGES</th><th>R2 STAGES</th><th>STATUS</th></tr></thead>
-          <tbody>
-            {rows.map((team, i) => {
-              const done = team.round1_complete_at != null;
-              const r2 = unlocked && qualified.includes(team.team_name) ? team.round2_stage : null;
-              const status = unlocked && qualified.includes(team.team_name)
-                ? <span className="table-ok">QUALIFIED</span>
-                : done
-                  ? "ROUND 1 COMPLETE"
-                  : <span className="muted-cell">IN PROGRESS</span>;
-              return (
-                <tr key={team.team_name}>
-                  <td>#{i + 1}</td>
-                  <td>{team.team_name}</td>
-                  <td>{team.round1_stage}/5</td>
-                  <td>{r2 !== null ? `${r2}/5` : "—"}</td>
-                  <td>{status}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+    <div className="admin-modal-backdrop" role="dialog" aria-modal="true" onClick={onClose}>
+      <div className="admin-modal team-details-modal" onClick={e => e.stopPropagation()} style={{maxWidth: '600px', width: '100%'}}>
+        <div className="section-kicker">TEAM DETAILS</div>
+        <h2 style={{marginTop: 0}}>{team.team_name}</h2>
+        <p><strong>Email:</strong> {team.email}</p>
+        <p><strong>Score:</strong> {team.score}</p>
+        
+        <div style={{marginTop: '1.5rem', marginBottom: '1.5rem', display: 'flex', gap: '2rem'}}>
+          <div style={{flex: 1}}>
+            <h3>Round 1 Status</h3>
+            <p><strong>Current Stage:</strong> {team.round1_stage}/5</p>
+            <p><strong>Completed At:</strong> {fmtTimestamp(team.round1_complete_at)}</p>
+            <ul style={{listStyle: 'none', padding: 0, marginTop: '0.5rem'}}>
+              {[1, 2, 3, 4, 5].map(stg => (
+                <li key={stg} style={{marginBottom: '0.25rem'}}>
+                  Stage {stg}: {team.round1_stage >= stg ? <span className="table-ok">Complete</span> : <span className="muted-cell">Pending</span>}
+                </li>
+              ))}
+            </ul>
+            <div style={{marginTop: '1rem'}}>
+              <button 
+                className="admin-btn secondary" 
+                onClick={() => onAdvance(team.team_name, 1, Math.min(5, team.round1_stage + 1))}
+                disabled={team.round1_stage >= 5}
+              >
+                Force Advance R1 Stage
+              </button>
+            </div>
+          </div>
+          
+          <div style={{flex: 1}}>
+            <h3>Round 2 Status</h3>
+            <p><strong>Current Stage:</strong> {team.round2_stage}/5</p>
+            <p><strong>Completed At:</strong> {fmtTimestamp(team.round2_complete_at)}</p>
+            <ul style={{listStyle: 'none', padding: 0, marginTop: '0.5rem'}}>
+              {[1, 2, 3, 4, 5].map(stg => (
+                <li key={stg} style={{marginBottom: '0.25rem'}}>
+                  Stage {stg}: {team.round2_stage >= stg ? <span className="table-ok">Complete</span> : <span className="muted-cell">Pending</span>}
+                </li>
+              ))}
+            </ul>
+            <div style={{marginTop: '1rem'}}>
+              <button 
+                className="admin-btn secondary" 
+                onClick={() => onAdvance(team.team_name, 2, Math.min(5, team.round2_stage + 1))}
+                disabled={team.round2_stage >= 5}
+              >
+                Force Advance R2 Stage
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="modal-actions">
+          <button className="admin-btn primary" onClick={onClose}>Close</button>
+        </div>
       </div>
-    </section>
+    </div>
   );
 }
 
@@ -631,6 +639,24 @@ export default function AdminPage() {
     setNotice(`Round 2 UNLOCKED for ${qualified.length} qualified team(s).`);
   }
 
+  const [selectedTeam, setSelectedTeam] = useState(null);
+
+  async function handleAdvanceTeam(teamName, round, targetStage) {
+    try {
+      await adminAdvanceTeam(teamName, round, targetStage);
+      setNotice(`Successfully advanced ${teamName} to Stage ${targetStage} in Round ${round}.`);
+      await loadTeams(); // refresh list
+      if (selectedTeam && selectedTeam.team_name === teamName) {
+        // Find updated team to keep modal accurate
+        const updated = await fetchAdminTeams();
+        const found = updated.find(t => t.team_name === teamName);
+        if (found) setSelectedTeam(found);
+      }
+    } catch (err) {
+      setNotice(`Failed to advance team: ${err.message}`);
+    }
+  }
+
   // ── Shared content area ──────────────────────────────────────────────────────
 
   function renderContent() {
@@ -646,11 +672,11 @@ export default function AdminPage() {
             teams={teams}
           />
         );
-      case "teams":
-        return <AdminTeams teams={teams} />;
+      case "leaderboard":
+        return <AdminLeaderboard teams={teams} qualified={qualified} unlocked={round2Unlocked} onSelectTeam={setSelectedTeam} />;
       case "round1":
         return (
-          <AdminRound1
+          <AdminRound1Qualification
             teams={teams}
             selected={selected}
             toggleEligible={toggleEligible}
@@ -660,8 +686,7 @@ export default function AdminPage() {
           />
         );
       case "chat":
-      case "logs":
-        // Both tabs now go to the transcript viewer (old "logs" = fake event log, now real chat_logs)
+        // Transcript viewer (handles both real chat_logs and manual advance system messages)
         return (
           <AdminTranscript
             teams={teams}
@@ -669,10 +694,6 @@ export default function AdminPage() {
             setTranscriptTeam={setTranscriptTeam}
           />
         );
-      case "leaderboard":
-        return <AdminLeaderboard teams={teams} qualified={qualified} unlocked={round2Unlocked} />;
-      case "results":
-        return <AdminResults teams={teams} qualified={qualified} unlocked={round2Unlocked} />;
       default:
         return null;
     }
@@ -689,12 +710,9 @@ export default function AdminPage() {
           <nav className="admin-nav">
             {[
               ["dashboard", "Dashboard"],
-              ["teams", "Teams"],
-              ["round1", "Round 1"],
+              ["leaderboard", "Teams & Leaderboard"],
+              ["round1", "Round 2 Qualification"],
               ["chat", "Team Chat / Transcripts"],
-              ["leaderboard", "Leaderboard"],
-              ["logs", "Activity Logs"],
-              ["results", "Results"],
             ].map(([id, label]) => (
               <button
                 key={id}
@@ -783,6 +801,14 @@ export default function AdminPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {selectedTeam && (
+        <TeamDetailsModal 
+          team={selectedTeam} 
+          onClose={() => setSelectedTeam(null)} 
+          onAdvance={handleAdvanceTeam} 
+        />
       )}
     </main>
   );

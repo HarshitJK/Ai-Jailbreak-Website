@@ -266,3 +266,17 @@ export async function fetchTeamLogs(teamId: string): Promise<ChatLogEntry[]> {
     { "X-Admin-Secret": ADMIN_SECRET },
   );
 }
+
+/**
+ * Manually advance a team to a target stage.
+ */
+export async function adminAdvanceTeam(
+  teamId: string,
+  round: number,
+  targetStage: number
+): Promise<{ ok: boolean }> {
+  return apiPost<{ ok: boolean }>(
+    `/api/admin/teams/${encodeURIComponent(teamId)}/advance`,
+    { round, target_stage: targetStage }
+  );
+}

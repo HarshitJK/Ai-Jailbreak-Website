@@ -67,5 +67,10 @@ class ChatLogEntry(BaseModel):
     round: int              # 1 or 2
     stage: int              # 1-indexed stage number
     role: str               # "user" | "assistant"
-    message: str
     timestamp: datetime
+
+
+class AdminAdvanceRequest(BaseModel):
+    """Payload for POST /api/admin/teams/{team_id}/advance."""
+    round: int         # 1 or 2
+    target_stage: int  # 1-5

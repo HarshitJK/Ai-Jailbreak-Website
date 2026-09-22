@@ -236,3 +236,54 @@ async def get_team_logs(
             )
         )
     return logs
+
+
+from app.models import AdminAdvanceRequest
+from datetime import timezone
+
+@router.post("/api/admin/teams/{team_id}/advance")
+async def admin_advance_team(
+    team_id: str,
+    payload: AdminAdvanceRequest,
+    request: Request,
+    x_admin_secret: Optional[str] = Header(default=None),
+    db: AsyncIOMotorDatabase = Depends(get_db),
+) -> dict:
+    """
+    Manually advance a team to a target stage without solving the challenge.
+    Updates the stage tracker and logs the action to chat_logs.
+    """
+    _require_admin(request, x_admin_secret)
+
+    if payload.round not in (1, 2) or payload.target_stage < 1 or payload.target_stage > 5:
+        raise HTTPException(status_code=400, detail="Invalid round or target_stage")
+
+    update_fields = {}
+    if payload.round == 1:
+        update_fields["round1_stage"] = payload.target_stage
+        if payload.target_stage == 5:
+            update_fields["round1_complete_at"] = datetime.now(timezone.utc)
+    else:
+        update_fields["round2_stage"] = payload.target_stage
+        if payload.target_stage == 5:
+            update_fields["round2_complete_at"] = datetime.now(timezone.utc)
+
+    result = await db["teams"].update_one(
+        {"team_name": team_id},
+        {"$set": update_fields}
+    )
+
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Team not found")
+
+    # Log the action in chat_logs so it's clear during review
+    await db["chat_logs"].insert_one({
+        "team_id": team_id,
+        "round": payload.round,
+        "stage": payload.target_stage,
+        "role": "system",
+        "message": f"Admin manually advanced team to Stage {payload.target_stage}",
+        "timestamp": datetime.now(timezone.utc),
+    })
+
+    return {"ok": True, "team_id": team_id, "round": payload.round, "target_stage": payload.target_stage}
