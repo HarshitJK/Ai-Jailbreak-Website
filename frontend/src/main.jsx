@@ -9,49 +9,8 @@ import LoginPage, { overview } from "./pages/LoginPage";
 import { sendChatMessage, registerTeam, loginTeam } from "./lib/apiClient";
 import Round1Page, { challenges, Brand } from "./pages/Round1Page";
 import AdminPage, { AdminLoginPage } from "./pages/AdminPage";
-import Round2page from "./pages/Round2page";
+import Round2Page from "./round2/Round2Page";
 
-/* ═══════════════════════════════════════════════════════════════════════════
-   ROUND 2 PAGE (placeholder — kept in main for now)
-═══════════════════════════════════════════════════════════════════════════ */
-function Round2({ participantTeam, logout, mobileNav, setMobileNav }) {
-  return (
-    <main className="challenge-page">
-      {mobileNav && <div className="mobile-backdrop" onClick={() => setMobileNav(false)} />}
-      <aside className={mobileNav ? "sidebar open" : "sidebar"}>
-        <div className="sidebar-top">
-          <Brand compact />
-          <div className="progress-title">Round 2 Progress</div>
-        </div>
-        <nav className="challenge-nav">
-          <button className="challenge-item selected unavailable" disabled>
-            <span>Operation Nova</span>
-            <small>Locked</small>
-          </button>
-        </nav>
-        <div className="sidebar-bottom">
-          <button onClick={logout}>Logout</button>
-        </div>
-      </aside>
-      <section className="chat-area">
-        <header className="chat-header">
-          <div>
-            <div className="eyebrow">AI JAILBREAK 2026</div>
-            <h1>Round 2: Operation Nova</h1>
-          </div>
-          <div className="team-chip">{participantTeam}</div>
-        </header>
-        <div className="chat-content" style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%" }}>
-          <div className="locked-message" style={{ textAlign: "center", padding: "2rem", border: "1px solid #333", borderRadius: "8px", background: "#111" }}>
-            <h2 style={{ color: "#ff4444", marginBottom: "1rem" }}>ROUND 2 LOCKED</h2>
-            <p style={{ color: "#aaa" }}>Round 2 has not been unlocked yet or your team has not qualified.</p>
-            <p style={{ color: "#888", fontSize: "0.9rem", marginTop: "1rem" }}>Please wait for the Event Control administrator to grant access.</p>
-          </div>
-        </div>
-      </section>
-    </main>
-  );
-}
 
 /* ═══════════════════════════════════════════════════════════════════════════
    APP — routing + shared state
@@ -241,11 +200,7 @@ function App() {
             />
           ) : <Navigate to="/login" replace />
         } />
-        <Route path="/round-2" element={
-          participantAuthenticated ? (
-            <Round2page />
-          ) : <Navigate to="/login" replace />
-        } />
+        <Route path="/round-2" element={<Round2Page />} />
         <Route path="/admin/login" element={<AdminLoginPage setAdminAuthenticated={setAdminAuthenticated} />} />
         <Route path="/admin/*" element={adminAuthenticated ? <AdminPage /> : <Navigate to="/admin/login" replace />} />
       </Routes>

@@ -1,0 +1,504 @@
+/*
+ * CampusHelp component styles — scoped under .campushelp-root
+ * so nothing bleeds into the main Prompt Heist theme.
+ *
+ * Source: campushelp/src/App.css — all selectors prefixed.
+ * Do NOT import this file at the app root level.
+ */
+
+.campushelp-root *,
+.campushelp-root *::before,
+.campushelp-root *::after {
+  box-sizing: border-box;
+}
+
+.campushelp-root {
+  scroll-behavior: smooth;
+  font-family: Inter, Arial, Helvetica, sans-serif;
+  color: #171717;
+  background: #f7f7f5;
+  min-height: 100vh;
+}
+
+.campushelp-root button,
+.campushelp-root input {
+  font: inherit;
+}
+
+.campushelp-root button {
+  cursor: pointer;
+}
+
+/* Nav */
+.campushelp-root .nav {
+  height: 76px;
+  padding: 0 6%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #deded9;
+  background: #f7f7f5;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.campushelp-root .logo {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+.campushelp-root .nav nav {
+  display: flex;
+  gap: 30px;
+}
+
+.campushelp-root .nav a {
+  color: #4a4a47;
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.campushelp-root .nav a:hover { color: #111; }
+
+.campushelp-root .nav-chat {
+  background: #171717;
+  color: white;
+  border: 0;
+  padding: 11px 18px;
+  border-radius: 4px;
+}
+
+/* Hero */
+.campushelp-root .hero {
+  min-height: 590px;
+  padding: 100px 10% 90px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  border-bottom: 1px solid #deded9;
+}
+
+.campushelp-root .hero-copy { max-width: 760px; }
+
+.campushelp-root .eyebrow,
+.campushelp-root .section-label {
+  margin: 0 0 20px;
+  font-size: 11px;
+  letter-spacing: 1.8px;
+  font-weight: 700;
+  color: #6e6e69;
+}
+
+.campushelp-root h1 {
+  margin: 0;
+  max-width: 760px;
+  font-size: clamp(48px, 7vw, 88px);
+  line-height: .96;
+  letter-spacing: -5px;
+  font-weight: 600;
+}
+
+.campushelp-root .hero-text {
+  max-width: 560px;
+  margin: 30px 0;
+  font-size: 18px;
+  line-height: 1.6;
+  color: #64645f;
+}
+
+.campushelp-root .primary {
+  border: 0;
+  background: #171717;
+  color: #fff;
+  padding: 14px 22px;
+  border-radius: 4px;
+}
+
+.campushelp-root .hero-note {
+  width: 180px;
+  border-top: 1px solid #aaa;
+  padding-top: 14px;
+  color: #60605b;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.campushelp-root .hero-note span {
+  color: #111;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* Intro / feature grid */
+.campushelp-root .intro { padding: 100px 10%; }
+
+.campushelp-root h2 {
+  margin: 0;
+  font-size: clamp(34px, 5vw, 58px);
+  line-height: 1;
+  letter-spacing: -2.5px;
+  font-weight: 600;
+}
+
+.campushelp-root .muted {
+  color: #73736e;
+  margin: 18px 0 50px;
+}
+
+.campushelp-root .feature-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border-top: 1px solid #d5d5d0;
+}
+
+.campushelp-root .feature-grid article {
+  min-height: 280px;
+  padding: 25px;
+  border-right: 1px solid #d5d5d0;
+}
+
+.campushelp-root .feature-grid article:last-child { border-right: 0; }
+
+.campushelp-root .feature-grid span {
+  font-size: 11px;
+  color: #777771;
+}
+
+.campushelp-root h3 {
+  font-size: 26px;
+  margin: 55px 0 12px;
+  letter-spacing: -1px;
+}
+
+.campushelp-root .feature-grid p {
+  color: #6a6a65;
+  line-height: 1.5;
+  max-width: 280px;
+}
+
+.campushelp-root .feature-grid button {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  margin-top: 20px;
+  color: #222;
+  font-weight: 600;
+}
+
+/* Bottom info */
+.campushelp-root .bottom-info {
+  padding: 90px 10%;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 80px;
+  background: #ecece7;
+}
+
+.campushelp-root .bottom-info > p {
+  color: #666660;
+  line-height: 1.7;
+  max-width: 480px;
+}
+
+/* Footer */
+.campushelp-root footer {
+  padding: 25px 6%;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #777771;
+  border-top: 1px solid #d5d5d0;
+}
+
+/* ── Chat widget ──────────────────────────────────────────────────────────────
+   All widget classes use the ch- prefix to avoid any collision with page rules.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+/* Launcher button */
+.campushelp-root .ch-launcher {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 100;
+  width: 52px;
+  height: 52px;
+  border: 0;
+  border-radius: 50%;
+  background: #1a1a1a;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.22);
+  transition: background 0.15s, transform 0.15s;
+}
+
+.campushelp-root .ch-launcher:hover {
+  background: #2e2e2e;
+  transform: translateY(-1px);
+}
+
+.campushelp-root .ch-launcher--open {
+  background: #3a3a3a;
+}
+
+/* Panel */
+.campushelp-root .ch-panel {
+  position: fixed;
+  right: 24px;
+  bottom: 96px;
+  width: 420px;
+  height: 600px;
+  z-index: 99;
+  background: #fff;
+  border: 1px solid #e0e0db;
+  border-radius: 12px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.13);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Panel header */
+.campushelp-root .ch-panel__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: #fff;
+  border-bottom: 1px solid #ebebе7;
+  flex-shrink: 0;
+}
+
+.campushelp-root .ch-panel__avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #1a1a1a;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.campushelp-root .ch-panel__identity {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.campushelp-root .ch-panel__name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #111;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.campushelp-root .ch-panel__sub {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: #787872;
+}
+
+.campushelp-root .ch-panel__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #3cad6e;
+  flex-shrink: 0;
+}
+
+.campushelp-root .ch-panel__close {
+  border: 0;
+  background: transparent;
+  padding: 6px;
+  color: #888;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: background 0.12s, color 0.12s;
+}
+
+.campushelp-root .ch-panel__close:hover {
+  background: #f2f2ef;
+  color: #222;
+}
+
+/* Message list */
+.campushelp-root .ch-panel__messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  scroll-behavior: smooth;
+}
+
+/* Bubbles */
+.campushelp-root .ch-bubble {
+  max-width: 80%;
+  padding: 10px 13px;
+  font-size: 13px;
+  line-height: 1.55;
+  border-radius: 10px;
+  word-break: break-word;
+}
+
+.campushelp-root .ch-bubble--bot {
+  align-self: flex-start;
+  background: #f2f2ef;
+  color: #1a1a1a;
+  border-bottom-left-radius: 3px;
+}
+
+.campushelp-root .ch-bubble--user {
+  align-self: flex-end;
+  background: #1a1a1a;
+  color: #fff;
+  border-bottom-right-radius: 3px;
+}
+
+/* Suggested-question pills */
+.campushelp-root .ch-pills {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  align-self: flex-start;
+  margin-top: 4px;
+}
+
+.campushelp-root .ch-pill {
+  border: 1px solid #d4d4cf;
+  background: #fff;
+  color: #2a2a2a;
+  padding: 7px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: left;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.campushelp-root .ch-pill:hover {
+  background: #f5f5f2;
+  border-color: #b0b0ab;
+}
+
+/* Disclaimer */
+.campushelp-root .ch-disclaimer {
+  margin: 0;
+  padding: 6px 16px;
+  font-size: 10.5px;
+  color: #b0b0a8;
+  line-height: 1.4;
+  border-top: 1px solid #f0f0ec;
+  flex-shrink: 0;
+}
+
+/* Input bar */
+.campushelp-root .ch-panel__form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid #ebebе7;
+  flex-shrink: 0;
+}
+
+.campushelp-root .ch-panel__input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid #deded9;
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 13px;
+  color: #1a1a1a;
+  background: #fafaf8;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.campushelp-root .ch-panel__input::placeholder {
+  color: #aaaaa5;
+}
+
+.campushelp-root .ch-panel__input:focus {
+  border-color: #aaaaа5;
+  background: #fff;
+}
+
+.campushelp-root .ch-panel__send {
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 8px;
+  background: #1a1a1a;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.12s, opacity 0.12s;
+}
+
+.campushelp-root .ch-panel__send:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.campushelp-root .ch-panel__send:not(:disabled):hover {
+  background: #2e2e2e;
+}
+
+/* Responsive */
+@media (max-width: 750px) {
+  .campushelp-root .nav { padding: 0 5%; }
+  .campushelp-root .nav nav { display: none; }
+  .campushelp-root .hero {
+    padding: 75px 7% 70px;
+    display: block;
+  }
+  .campushelp-root h1 { letter-spacing: -3px; }
+  .campushelp-root .hero-note { margin-top: 60px; }
+  .campushelp-root .intro,
+  .campushelp-root .bottom-info { padding: 70px 7%; }
+  .campushelp-root .feature-grid { grid-template-columns: 1fr; }
+  .campushelp-root .feature-grid article {
+    border-right: 0;
+    border-bottom: 1px solid #d5d5d0;
+  }
+  .campushelp-root .feature-grid article:last-child { border-bottom: 0; }
+  .campushelp-root .bottom-info { grid-template-columns: 1fr; gap: 30px; }
+
+  /* Widget on small screens */
+  .campushelp-root .ch-panel {
+    right: 0;
+    bottom: 80px;
+    width: 100vw;
+    height: 75vh;
+    border-radius: 12px 12px 0 0;
+    border-left: 0;
+    border-right: 0;
+    border-bottom: 0;
+  }
+
+  .campushelp-root .ch-launcher {
+    right: 16px;
+    bottom: 16px;
+  }
+}
+

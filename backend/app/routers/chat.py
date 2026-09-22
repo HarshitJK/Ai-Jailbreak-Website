@@ -20,11 +20,11 @@ from app.personas import stage1, stage2, stage3, stage4, stage5
 
 # Load all 5 stage personas
 PERSONAS: Dict[int, Dict[str, str]] = {
-    1: {"SYSTEM_PROMPT": stage1.SYSTEM_PROMPT, "DETECTION_STRING": stage1.DETECTION_STRING},
-    2: {"SYSTEM_PROMPT": stage2.SYSTEM_PROMPT, "DETECTION_STRING": stage2.DETECTION_STRING},
-    3: {"SYSTEM_PROMPT": stage3.SYSTEM_PROMPT, "DETECTION_STRING": stage3.DETECTION_STRING},
-    4: {"SYSTEM_PROMPT": stage4.SYSTEM_PROMPT, "DETECTION_STRING": stage4.DETECTION_STRING},
-    5: {"SYSTEM_PROMPT": stage5.SYSTEM_PROMPT, "DETECTION_STRING": stage5.DETECTION_STRING},
+    1: {"SYSTEM_PROMPT": stage1.SYSTEM_PROMPT, "DETECTION_STRING": stage1.DETECTION_STRING, "MODEL": stage1.MODEL},
+    2: {"SYSTEM_PROMPT": stage2.SYSTEM_PROMPT, "DETECTION_STRING": stage2.DETECTION_STRING, "MODEL": stage2.MODEL},
+    3: {"SYSTEM_PROMPT": stage3.SYSTEM_PROMPT, "DETECTION_STRING": stage3.DETECTION_STRING, "MODEL": stage3.MODEL},
+    4: {"SYSTEM_PROMPT": stage4.SYSTEM_PROMPT, "DETECTION_STRING": stage4.DETECTION_STRING, "MODEL": stage4.MODEL},
+    5: {"SYSTEM_PROMPT": stage5.SYSTEM_PROMPT, "DETECTION_STRING": stage5.DETECTION_STRING, "MODEL": stage5.MODEL},
 }
 
 TOTAL_STAGES = 5
@@ -124,8 +124,8 @@ async def chat_endpoint(
     persona = PERSONAS[stage_num]
     history = session_store.get_history(team_id, stage_num)
 
-    # Call LLM (stubbed)
-    reply = await llm_client.call_llm(persona["SYSTEM_PROMPT"], history, user_message)
+    # Call LLM with the stage's assigned model
+    reply = await llm_client.call_llm(persona["SYSTEM_PROMPT"], history, user_message, model=persona["MODEL"])
 
     # Persist history to in-memory store (fast path — unchanged)
     session_store.add_to_history(team_id, stage_num, user_message, reply)

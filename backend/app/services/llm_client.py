@@ -7,8 +7,11 @@ Env vars (all read at import time via python-dotenv):
   GROQ_MODEL    — Groq model ID, default "openai/gpt-oss-20b"
   ANTHROPIC_API_KEY — required when LLM_PROVIDER=anthropic (unused by default)
 
-Public API (unchanged — chat.py never needs to change):
-  async def call_llm(system_prompt: str, history: list, message: str) -> str
+Public API:
+  async def call_llm(system_prompt: str, history: list, message: str, model: str | None = None) -> str
+
+  `model` overrides the GROQ_MODEL env default for per-stage model selection.
+  Pass None (or omit) to fall back to the env default.
 
 history is the List[Dict[str, str]] that session_store returns:
   [{"role": "user", "content": "..."}, {"role": "assistant", "content": "..."}, ...]
@@ -32,6 +35,7 @@ async def _call_groq(
     system_prompt: str,
     history: List[Dict[str, str]],
     message: str,
+    model: str = GROQ_MODEL,
 ) -> str:
     """
     Call Groq's chat-completions endpoint using the official `groq` SDK
@@ -70,7 +74,7 @@ async def _call_groq(
 
     try:
         response = await client.chat.completions.create(
-            model=GROQ_MODEL,
+            model=model,
             messages=messages,
         )
     except Exception as exc:
@@ -88,6 +92,7 @@ async def _call_anthropic(
     system_prompt: str,
     history: List[Dict[str, str]],
     message: str,
+    model: str = GROQ_MODEL,
 ) -> str:
     """
     Call Anthropic's Messages API using the `anthropic` SDK.
@@ -140,18 +145,23 @@ async def call_llm(
     system_prompt: str,
     history: List[Dict[str, str]],
     message: str,
+    model: str | None = None,
 ) -> str:
     """
     Route the request to the configured LLM provider.
+
+    `model` selects the model to use; if None, falls back to the GROQ_MODEL
+    env default. This allows per-stage model overrides without touching env vars.
 
     Raises RuntimeError (not silently caught) so chat.py can surface a
     meaningful HTTP 500 to the frontend rather than returning a stub string
     that would falsely pass the detection check.
     """
+    resolved_model = model if model is not None else GROQ_MODEL
     if LLM_PROVIDER == "groq":
-        return await _call_groq(system_prompt, history, message)
+        return await _call_groq(system_prompt, history, message, model=resolved_model)
     elif LLM_PROVIDER == "anthropic":
-        return await _call_anthropic(system_prompt, history, message)
+        return await _call_anthropic(system_prompt, history, message, model=resolved_model)
     else:
         raise RuntimeError(
             f"Unknown LLM_PROVIDER '{LLM_PROVIDER}'. "
