@@ -284,11 +284,7 @@ function App() {
             />
           </ProtectedRoute>
         } />
-        <Route path="/round-2" element={
-          <ProtectedRoute>
-            <Round2Page />
-          </ProtectedRoute>
-        } />
+        <Route path="/round-2" element={<Round2Page />} />
         <Route path="/admin/login" element={<AdminLoginPage />} />
         <Route path="/admin/*" element={
           <AdminProtectedRoute>

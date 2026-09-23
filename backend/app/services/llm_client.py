@@ -19,9 +19,12 @@ which is exactly the OpenAI/Groq messages format, so no conversion needed.
 """
 
 import os
+import json
 from typing import List, Dict
 
 from dotenv import load_dotenv
+
+from app.services import round2_tools
 
 load_dotenv()
 
@@ -36,6 +39,7 @@ async def _call_groq(
     history: List[Dict[str, str]],
     message: str,
     model: str = GROQ_MODEL,
+    tools: list = None,
 ) -> str:
     """
     Call Groq's chat-completions endpoint using the official `groq` SDK
@@ -73,17 +77,70 @@ async def _call_groq(
     ]
 
     try:
-        response = await client.chat.completions.create(
-            model=model,
-            messages=messages,
-        )
+        while True:
+            kwargs = {}
+            if tools:
+                kwargs["tools"] = tools
+                kwargs["tool_choice"] = "auto"
+                
+            response = await client.chat.completions.create(
+                model=model,
+                messages=messages,
+                **kwargs
+            )
+            
+            response_message = response.choices[0].message
+            tool_calls = response_message.tool_calls
+            
+            if not tool_calls:
+                content = response_message.content
+                if content is None:
+                    raise RuntimeError("Groq returned an empty response (content=None).")
+                return content
+            
+            assistant_msg = {
+                "role": "assistant",
+                "tool_calls": [
+                    {
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {
+                            "name": tc.function.name,
+                            "arguments": tc.function.arguments,
+                        }
+                    } for tc in tool_calls
+                ]
+            }
+            if response_message.content:
+                assistant_msg["content"] = response_message.content
+            messages.append(assistant_msg)
+            
+            for tool_call in tool_calls:
+                function_name = tool_call.function.name
+                try:
+                    function_args = json.loads(tool_call.function.arguments)
+                except json.JSONDecodeError:
+                    function_args = {}
+                
+                if hasattr(round2_tools, function_name):
+                    func = getattr(round2_tools, function_name)
+                    try:
+                        function_response = func(**function_args)
+                    except Exception as e:
+                        function_response = {"error": str(e)}
+                else:
+                    function_response = {"error": f"Function {function_name} not found"}
+                
+                messages.append(
+                    {
+                        "tool_call_id": tool_call.id,
+                        "role": "tool",
+                        "name": function_name,
+                        "content": json.dumps(function_response),
+                    }
+                )
     except Exception as exc:
         raise RuntimeError(f"Groq API call failed: {exc}") from exc
-
-    content = response.choices[0].message.content
-    if content is None:
-        raise RuntimeError("Groq returned an empty response (content=None).")
-    return content
 
 
 # ── Provider: Anthropic (future switch — not active by default) ───────────────
@@ -146,6 +203,7 @@ async def call_llm(
     history: List[Dict[str, str]],
     message: str,
     model: str | None = None,
+    tools: list = None,
 ) -> str:
     """
     Route the request to the configured LLM provider.
@@ -159,7 +217,7 @@ async def call_llm(
     """
     resolved_model = model if model is not None else GROQ_MODEL
     if LLM_PROVIDER == "groq":
-        return await _call_groq(system_prompt, history, message, model=resolved_model)
+        return await _call_groq(system_prompt, history, message, model=resolved_model, tools=tools)
     elif LLM_PROVIDER == "anthropic":
         return await _call_anthropic(system_prompt, history, message, model=resolved_model)
     else:

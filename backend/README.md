@@ -28,7 +28,7 @@ backend/
 │   │   └── health.py        GET /api/health
 │   ├── personas/
 │   │   ├── stage1.py        SYSTEM_PROMPT + DETECTION_STRING (Circuit Voice)
-│   │   ├── stage2.py        SYSTEM_PROMPT + DETECTION_STRING (Professor Vera)
+│   │   ├── stage2.py        SYSTEM_PROMPT + DETECTION_STRING (Chef Aroma)
 │   │   ├── stage3.py        SYSTEM_PROMPT + DETECTION_STRING (NovaAssist)
 │   │   ├── stage4.py        SYSTEM_PROMPT + DETECTION_STRING (TalentGate)
 │   │   └── stage5.py        SYSTEM_PROMPT + DETECTION_STRING (Aegis)

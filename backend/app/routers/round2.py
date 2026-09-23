@@ -29,11 +29,11 @@ from app.personas.round2 import stage1, stage2, stage3, stage4, stage5
 # ── Persona registry (1-indexed) ──────────────────────────────────────────────
 
 PERSONAS = {
-    1: {"SYSTEM_PROMPT": stage1.SYSTEM_PROMPT, "DETECTION_STRING": stage1.DETECTION_STRING, "MODEL": stage1.MODEL},
-    2: {"SYSTEM_PROMPT": stage2.SYSTEM_PROMPT, "DETECTION_STRING": stage2.DETECTION_STRING, "MODEL": stage2.MODEL},
-    3: {"SYSTEM_PROMPT": stage3.SYSTEM_PROMPT, "DETECTION_STRING": stage3.DETECTION_STRING, "MODEL": stage3.MODEL},
-    4: {"SYSTEM_PROMPT": stage4.SYSTEM_PROMPT, "DETECTION_STRING": stage4.DETECTION_STRING, "MODEL": stage4.MODEL},
-    5: {"SYSTEM_PROMPT": stage5.SYSTEM_PROMPT, "DETECTION_STRING": stage5.DETECTION_STRING, "MODEL": stage5.MODEL},
+    1: {"SYSTEM_PROMPT": stage1.SYSTEM_PROMPT, "DETECTION_STRING": stage1.DETECTION_STRING, "MODEL": stage1.MODEL, "TOOLS": getattr(stage1, "TOOLS", None)},
+    2: {"SYSTEM_PROMPT": stage2.SYSTEM_PROMPT, "DETECTION_STRING": stage2.DETECTION_STRING, "MODEL": stage2.MODEL, "TOOLS": getattr(stage2, "TOOLS", None)},
+    3: {"SYSTEM_PROMPT": stage3.SYSTEM_PROMPT, "DETECTION_STRING": stage3.DETECTION_STRING, "MODEL": stage3.MODEL, "TOOLS": getattr(stage3, "TOOLS", None)},
+    4: {"SYSTEM_PROMPT": stage4.SYSTEM_PROMPT, "DETECTION_STRING": stage4.DETECTION_STRING, "MODEL": stage4.MODEL, "TOOLS": getattr(stage4, "TOOLS", None)},
+    5: {"SYSTEM_PROMPT": stage5.SYSTEM_PROMPT, "DETECTION_STRING": stage5.DETECTION_STRING, "MODEL": stage5.MODEL, "TOOLS": getattr(stage5, "TOOLS", None)},
 }
 
 TOTAL_STAGES = 5
@@ -147,6 +147,7 @@ async def round2_chat(
         history=history,
         message=user_message,
         model=persona["MODEL"],
+        tools=persona.get("TOOLS"),
     )
 
     # Persist the exchange to the shared history
