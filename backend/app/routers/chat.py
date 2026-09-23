@@ -187,6 +187,15 @@ async def chat_endpoint(
     persona = PERSONAS[stage_num]
     history = session_store.get_history(team_id, stage_num)
 
+    # Enforce rate limit
+    rate_limit_msg = session_store.check_rate_limit(team_id, round_num=1)
+    if rate_limit_msg:
+        return ChatResponse(
+            reply=rate_limit_msg,
+            stageComplete=False,
+            nextStage=None,
+        )
+
     # Call LLM with the stage's assigned model
     reply = await llm_client.call_llm(persona["SYSTEM_PROMPT"], history, user_message, model=persona["MODEL"])
 

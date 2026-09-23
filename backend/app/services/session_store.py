@@ -9,6 +9,34 @@ Both stores can be swapped for Redis later without changing the calling code.
 """
 
 from typing import List, Dict, Set
+import time
+
+
+# ── Rate limiting ───────────────────────────────────────────────────────────────
+
+_rate_limit_timestamps: Dict[str, float] = {}
+_rate_limit_counts_r1: Dict[str, int] = {}
+_rate_limit_counts_r2: Dict[str, int] = {}
+
+def check_rate_limit(team_id: str, round_num: int) -> str | None:
+    """
+    Check if a team has exceeded rate limits.
+    Returns an error message string if limits are exceeded, else None.
+    """
+    now = time.time()
+    
+    last_msg = _rate_limit_timestamps.get(team_id, 0)
+    if now - last_msg < 2.0:
+        return "Slow down! You can only send 1 message every 2 seconds."
+        
+    counts = _rate_limit_counts_r1 if round_num == 1 else _rate_limit_counts_r2
+    current_count = counts.get(team_id, 0)
+    if current_count >= 100:
+        return f"Rate limit exceeded: Max 100 messages per team in Round {round_num} reached."
+        
+    _rate_limit_timestamps[team_id] = now
+    counts[team_id] = current_count + 1
+    return None
 
 
 # ── Round 1 store ─────────────────────────────────────────────────────────────
@@ -70,6 +98,11 @@ def clear_team(team_id: str) -> None:
     _completed_stages.pop(team_id, None)
     # Also clear round-2 session
     _r2_store.pop(team_id, None)
+    
+    # Clear rate limits
+    _rate_limit_timestamps.pop(team_id, None)
+    _rate_limit_counts_r1.pop(team_id, None)
+    _rate_limit_counts_r2.pop(team_id, None)
 
 
 # ── Round 2 session helpers ───────────────────────────────────────────────────
@@ -114,3 +147,4 @@ def r2_advance_stage(team_id: str) -> int:
 def r2_clear_team(team_id: str) -> None:
     """Clears the Round 2 session for a team (e.g. on admin reset)."""
     _r2_store.pop(team_id, None)
+    _rate_limit_counts_r2.pop(team_id, None)

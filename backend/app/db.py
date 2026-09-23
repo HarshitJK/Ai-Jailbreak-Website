@@ -26,6 +26,18 @@ def get_motor_client() -> AsyncIOMotorClient:
     return _client
 
 
+async def ping_db() -> None:
+    """Ping the database to verify connection. Fails fast if connection fails."""
+    client = get_motor_client()
+    try:
+        await client.admin.command('ping')
+    except Exception as exc:
+        raise RuntimeError(
+            f"Failed to connect to MongoDB Atlas at {MONGO_URI}. "
+            f"Please check your password and IP whitelist. Error: {exc}"
+        ) from exc
+
+
 async def get_db() -> AsyncIOMotorDatabase:
     """
     FastAPI dependency that yields the Motor database handle.

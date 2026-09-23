@@ -13,7 +13,7 @@ from app.routers import chat, health
 from app.routers import auth
 from app.routers import admin
 from app.routers import round2
-from app.db import get_motor_client, close_motor_client
+from app.db import get_motor_client, close_motor_client, ping_db
 
 load_dotenv()  # take environment variables from .env.
 
@@ -23,7 +23,9 @@ async def lifespan(app: FastAPI):
     """Startup: initialise the Motor client. Shutdown: close it cleanly."""
     # Eagerly create the Motor client so the first request isn't slower
     client = get_motor_client()
-    print(f"[startup] Connected to MongoDB at {os.getenv('MONGO_URI', 'mongodb://localhost:27017')}")
+    print(f"[startup] Testing connection to MongoDB at {os.getenv('MONGO_URI', 'mongodb://localhost:27017')}")
+    await ping_db()
+    print("[startup] MongoDB Atlas connected successfully.")
     yield
     await close_motor_client()
     print("[shutdown] MongoDB connection closed.")

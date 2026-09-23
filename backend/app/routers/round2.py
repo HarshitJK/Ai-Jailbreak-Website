@@ -148,6 +148,16 @@ async def round2_chat(
     # Load the persona for the current stage
     persona = PERSONAS[current_stage]
 
+    # Enforce rate limit
+    rate_limit_msg = session_store.check_rate_limit(team_id, round_num=2)
+    if rate_limit_msg:
+        return Round2ChatResponse(
+            reply=rate_limit_msg,
+            stageComplete=False,
+            currentStage=current_stage,
+            systemMessage=None,
+        )
+
     # Call the LLM — pass the full cross-stage history so context carries over
     reply = await llm_client.call_llm(
         system_prompt=persona["SYSTEM_PROMPT"],

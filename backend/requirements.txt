@@ -8,3 +8,5 @@ motor
 bcrypt
 python-multipart
 python-jose[cryptography]
+dnspython
+openai
