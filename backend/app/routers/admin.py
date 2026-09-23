@@ -132,8 +132,10 @@ class AdminTeamRow(BaseModel):
     """
     team_name: str
     email: str
+    round1_started_at: Optional[datetime]
     round1_stage: int                        # 0 = not started, 5 = all stages done
     round1_complete_at: Optional[datetime]   # null until all 5 stages complete
+    qualified: bool
     round2_stage: int
     round2_complete_at: Optional[datetime]
     score: int
@@ -171,8 +173,10 @@ async def list_teams(
             "_id": 0,
             "team_name": 1,
             "email": 1,
+            "round1_started_at": 1,
             "round1_stage": 1,
             "round1_complete_at": 1,
+            "qualified": 1,
             "round2_stage": 1,
             "round2_complete_at": 1,
             "score": 1,
@@ -185,8 +189,10 @@ async def list_teams(
             AdminTeamRow(
                 team_name=doc["team_name"],
                 email=doc["email"],
+                round1_started_at=doc.get("round1_started_at"),
                 round1_stage=doc.get("round1_stage", 0),
                 round1_complete_at=doc.get("round1_complete_at"),
+                qualified=doc.get("qualified", False),
                 round2_stage=doc.get("round2_stage", 0),
                 round2_complete_at=doc.get("round2_complete_at"),
                 score=doc.get("score", 0),
@@ -287,3 +293,85 @@ async def admin_advance_team(
     })
 
     return {"ok": True, "team_id": team_id, "round": payload.round, "target_stage": payload.target_stage}
+
+@router.get("/api/admin/leaderboard/round1", response_model=List[AdminTeamRow])
+async def get_leaderboard_round1(
+    request: Request,
+    x_admin_secret: Optional[str] = Header(default=None),
+    db: AsyncIOMotorDatabase = Depends(get_db),
+):
+    _require_admin(request, x_admin_secret)
+    cursor = db["teams"].find(
+        {},
+        {
+            "_id": 0, "team_name": 1, "email": 1, "round1_started_at": 1,
+            "round1_stage": 1, "round1_complete_at": 1, "qualified": 1,
+            "round2_stage": 1, "round2_complete_at": 1, "score": 1
+        }
+    ).sort([("round1_stage", -1), ("round1_complete_at", 1)])
+    
+    teams = []
+    async for doc in cursor:
+        teams.append(AdminTeamRow(**doc))
+    return teams
+
+
+@router.get("/api/admin/leaderboard/round2", response_model=List[AdminTeamRow])
+async def get_leaderboard_round2(
+    request: Request,
+    x_admin_secret: Optional[str] = Header(default=None),
+    db: AsyncIOMotorDatabase = Depends(get_db),
+):
+    _require_admin(request, x_admin_secret)
+    # Only return teams that are qualified
+    cursor = db["teams"].find(
+        {"qualified": True},
+        {
+            "_id": 0, "team_name": 1, "email": 1, "round1_started_at": 1,
+            "round1_stage": 1, "round1_complete_at": 1, "qualified": 1,
+            "round2_stage": 1, "round2_complete_at": 1, "score": 1
+        }
+    ).sort([("round2_stage", -1), ("round2_complete_at", 1)])
+    
+    teams = []
+    async for doc in cursor:
+        teams.append(AdminTeamRow(**doc))
+    return teams
+
+
+@router.post("/api/admin/teams/{team_id}/qualify")
+async def toggle_qualify_team(
+    team_id: str,
+    request: Request,
+    x_admin_secret: Optional[str] = Header(default=None),
+    db: AsyncIOMotorDatabase = Depends(get_db),
+):
+    _require_admin(request, x_admin_secret)
+    team_doc = await db["teams"].find_one({"team_name": team_id})
+    if not team_doc:
+        raise HTTPException(status_code=404, detail="Team not found")
+    
+    new_status = not team_doc.get("qualified", False)
+    await db["teams"].update_one(
+        {"team_name": team_id},
+        {"$set": {"qualified": new_status}}
+    )
+    return {"ok": True, "qualified": new_status}
+
+
+@router.delete("/api/admin/teams/{team_id}")
+async def delete_team(
+    team_id: str,
+    request: Request,
+    x_admin_secret: Optional[str] = Header(default=None),
+    db: AsyncIOMotorDatabase = Depends(get_db),
+):
+    _require_admin(request, x_admin_secret)
+    # Delete team record
+    result = await db["teams"].delete_one({"team_name": team_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Team not found")
+    
+    # Cascade delete chat logs
+    await db["chat_logs"].delete_many({"team_id": team_id})
+    return {"ok": True}

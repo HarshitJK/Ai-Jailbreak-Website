@@ -170,7 +170,7 @@ export function AdminLoginPage() {
 
 // ── Sub-components (all receive real `teams` from the parent fetch) ────────────
 
-function AdminDashboard({ formatTimer, remaining, teams }) {
+function AdminDashboard({ teams }) {
   const totalTeams = teams.length;
   // "active" = teams that have sent at least one message (round1_stage > 0)
   const activeTeams = teams.filter((t) => t.round1_stage > 0).length;
@@ -184,11 +184,6 @@ function AdminDashboard({ formatTimer, remaining, teams }) {
           <div className="section-kicker">DASHBOARD</div>
           <h2>Event overview</h2>
           <p>Live control view for team progress, round status, and event management.</p>
-        </div>
-        <div className="hero-timer">
-          <span>EVENT TIMER</span>
-          <strong>{formatTimer(remaining)}</strong>
-          <small>Local countdown — does not sync to server</small>
         </div>
       </section>
       <div className="stat-grid">
@@ -435,56 +430,74 @@ function AdminTranscript({ teams, transcriptTeam, setTranscriptTeam }) {
   );
 }
 
-function AdminLeaderboard({ teams, qualified, unlocked, onSelectTeam }) {
-  if (teams.length === 0) return (
-    <section className="admin-panel">
-      <SectionTitle kicker="TEAMS & LEADERBOARD" title="Live leaderboard" />
-      <EmptyTeamsState />
-    </section>
-  );
+function AdminLeaderboard({ onSelectTeam }) {
+  const [tab, setTab] = useState("round1");
+  const [r1Teams, setR1Teams] = useState([]);
+  const [r2Teams, setR2Teams] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const rows = [...teams].sort((a, b) => {
-    const aStages = a.round1_stage + (unlocked && qualified.includes(a.team_name) ? a.round2_stage : 0);
-    const bStages = b.round1_stage + (unlocked && qualified.includes(b.team_name) ? b.round2_stage : 0);
-    if (bStages !== aStages) return bStages - aStages;
-    if (a.round1_complete_at && b.round1_complete_at) {
-      return new Date(a.round1_complete_at) - new Date(b.round1_complete_at);
-    }
-    return a.round1_complete_at ? -1 : b.round1_complete_at ? 1 : 0;
-  });
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      setLoading(true);
+      try {
+        const { fetchLeaderboardR1, fetchLeaderboardR2 } = await import("../lib/apiClient");
+        const [r1, r2] = await Promise.all([fetchLeaderboardR1(), fetchLeaderboardR2()]);
+        if (active) {
+          setR1Teams(r1);
+          setR2Teams(r2);
+        }
+      } catch (err) {
+        console.error("Failed to load leaderboards", err);
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+    load();
+    return () => { active = false; };
+  }, []);
+
+  if (loading) return <section className="admin-panel"><div className="admin-chat-note">Loading leaderboard...</div></section>;
+
+  const currentTeams = tab === "round1" ? r1Teams : r2Teams;
 
   return (
     <section className="admin-panel">
       <SectionTitle kicker="TEAMS & LEADERBOARD" title="Live leaderboard" />
-      <p className="panel-note">Click any team row to view detailed status and manual advance controls.</p>
-      <div className="table-wrap">
-        <table className="admin-table">
-          <thead><tr><th>RANK</th><th>TEAM</th><th>R1 STAGES</th><th>R2 STAGES</th><th>TOTAL</th><th>STATUS</th></tr></thead>
-          <tbody>
-            {rows.map((team, i) => {
-              const done = team.round1_complete_at != null;
-              const r2 = unlocked && qualified.includes(team.team_name) ? team.round2_stage : null;
-              const total = team.round1_stage + (r2 !== null ? r2 : 0);
-              const status = unlocked && qualified.includes(team.team_name)
-                ? <span className="table-ok">QUALIFIED</span>
-                : done
-                  ? "ROUND 1 COMPLETE"
-                  : <span className="muted-cell">IN PROGRESS</span>;
-              
-              return (
+      <div style={{ display: "flex", gap: "1rem", marginBottom: "1rem" }}>
+        <button className={`admin-btn ${tab === 'round1' ? 'primary' : 'secondary'}`} onClick={() => setTab("round1")}>Round 1</button>
+        <button className={`admin-btn ${tab === 'round2' ? 'primary' : 'secondary'}`} onClick={() => setTab("round2")}>Round 2</button>
+      </div>
+      <p className="panel-note">Click any team row to view detailed status, qualify, or delete.</p>
+      
+      {currentTeams.length === 0 ? (
+        <EmptyTeamsState />
+      ) : (
+        <div className="table-wrap">
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>RANK</th><th>TEAM</th><th>R1 STAGES</th><th>R2 STAGES</th><th>STATUS</th>
+              </tr>
+            </thead>
+            <tbody>
+              {currentTeams.map((team, i) => (
                 <tr key={team.team_name} onClick={() => onSelectTeam(team)} style={{cursor: 'pointer'}} className="hover-row">
                   <td>#{i + 1}</td>
                   <td>{team.team_name}</td>
                   <td>{team.round1_stage}/5</td>
-                  <td>{r2 !== null ? `${r2}/5` : "—"}</td>
-                  <td>{total}</td>
-                  <td>{status}</td>
+                  <td>{team.qualified ? `${team.round2_stage}/5` : "—"}</td>
+                  <td>
+                    {team.qualified ? <span className="table-ok">QUALIFIED</span> : 
+                     team.round1_complete_at ? "ROUND 1 COMPLETE" : 
+                     <span className="muted-cell">IN PROGRESS</span>}
+                  </td>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </section>
   );
 }
@@ -527,6 +540,7 @@ function TeamDetailsModal({ team, onClose, onAdvance }) {
             <h3>Round 2 Status</h3>
             <p><strong>Current Stage:</strong> {team.round2_stage}/5</p>
             <p><strong>Completed At:</strong> {fmtTimestamp(team.round2_complete_at)}</p>
+            <p><strong>Qualified:</strong> {team.qualified ? "Yes" : "No"}</p>
             <ul style={{listStyle: 'none', padding: 0, marginTop: '0.5rem'}}>
               {[1, 2, 3, 4, 5].map(stg => (
                 <li key={stg} style={{marginBottom: '0.25rem'}}>
@@ -534,7 +548,7 @@ function TeamDetailsModal({ team, onClose, onAdvance }) {
                 </li>
               ))}
             </ul>
-            <div style={{marginTop: '1rem'}}>
+            <div style={{marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem'}}>
               <button 
                 className="admin-btn secondary" 
                 onClick={() => onAdvance(team.team_name, 2, Math.min(5, team.round2_stage + 1))}
@@ -544,6 +558,41 @@ function TeamDetailsModal({ team, onClose, onAdvance }) {
               </button>
             </div>
           </div>
+        </div>
+
+        <div style={{ padding: '1rem', borderTop: '1px solid rgba(255,255,255,0.1)', marginBottom: '1.5rem' }}>
+            <h3>Team Management</h3>
+            <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
+              <button 
+                className={`admin-btn ${team.qualified ? 'secondary' : 'primary'}`}
+                onClick={async () => {
+                  try {
+                    const { qualifyTeam } = await import("../lib/apiClient");
+                    const res = await qualifyTeam(team.team_name);
+                    alert(`Team is now ${res.qualified ? 'qualified' : 'disqualified'}. Refresh to see changes.`);
+                    onClose();
+                  } catch (e) { alert("Failed to toggle qualify: " + e.message); }
+                }}
+              >
+                {team.qualified ? "Revoke Qualification" : "Qualify for Round 2"}
+              </button>
+              
+              <button 
+                className="admin-btn danger" style={{ backgroundColor: '#ff2a2a', color: 'white', borderColor: '#ff2a2a' }}
+                onClick={async () => {
+                  if (confirm(`Are you sure you want to permanently delete team ${team.team_name}? This will delete all chat logs and progress.`)) {
+                    try {
+                      const { deleteTeam } = await import("../lib/apiClient");
+                      await deleteTeam(team.team_name);
+                      alert("Team deleted.");
+                      onClose();
+                    } catch (e) { alert("Failed to delete team: " + e.message); }
+                  }
+                }}
+              >
+                Delete Team
+              </button>
+            </div>
         </div>
 
         <div className="modal-actions">
@@ -597,23 +646,14 @@ export default function AdminPage() {
     loadTeams();
   }, [loadTeams]);
 
-  // ── Event timer ──────────────────────────────────────────────────────────────
-  useEffect(() => {
-    const timer = window.setInterval(() => setRemaining((v) => Math.max(0, v - 1)), 1000);
-    return () => window.clearInterval(timer);
-  }, []);
+  // Event timer was moved to Round 1 Page
 
   // ── Derived values ───────────────────────────────────────────────────────────
   const completedTeams = teams.filter((t) => t.round1_complete_at != null);
   const qualifiedCount = qualified.length;
   const round2Active = round2Unlocked ? Math.min(qualifiedCount, 3) : 0;
 
-  function formatTimer(total) {
-    const h = String(Math.floor(total / 3600)).padStart(2, "0");
-    const m = String(Math.floor((total % 3600) / 60)).padStart(2, "0");
-    const s = String(total % 60).padStart(2, "0");
-    return `${h}:${m}:${s}`;
-  }
+
 
   function toggleEligible(teamName) {
     if (round2Unlocked || !completedTeams.some((t) => t.team_name === teamName)) return;
@@ -667,13 +707,11 @@ export default function AdminPage() {
       case "dashboard":
         return (
           <AdminDashboard
-            formatTimer={formatTimer}
-            remaining={remaining}
             teams={teams}
           />
         );
       case "leaderboard":
-        return <AdminLeaderboard teams={teams} qualified={qualified} unlocked={round2Unlocked} onSelectTeam={setSelectedTeam} />;
+        return <AdminLeaderboard onSelectTeam={setSelectedTeam} />;
       case "round1":
         return (
           <AdminRound1Qualification
@@ -745,7 +783,6 @@ export default function AdminPage() {
           <div className="admin-header-state">
             <div><span>EVENT STATUS</span><strong className="live-dot">LIVE</strong></div>
             <div><span>CURRENT ROUND</span><strong>{round2Unlocked ? "ROUND 2" : "ROUND 1"}</strong></div>
-            <div><span>EVENT TIMER</span><strong className="timer-value">{formatTimer(remaining)}</strong></div>
           </div>
         </header>
         <div className="admin-content">
@@ -759,7 +796,6 @@ export default function AdminPage() {
             <div className="control-grid">
               <ControlValue label="EVENT STATUS" value="LIVE" />
               <ControlValue label="CURRENT ROUND" value={round2Unlocked ? "ROUND 2" : "ROUND 1"} />
-              <ControlValue label="EVENT TIMER" value={formatTimer(remaining)} />
               <ControlValue
                 label="ROUND 1 STATUS"
                 value={teamsLoading ? "Loading…" : completedTeams.length > 0 ? `${completedTeams.length} / ${teams.length} COMPLETE` : "IN PROGRESS"}

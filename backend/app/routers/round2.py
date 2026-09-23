@@ -133,6 +133,13 @@ async def round2_chat(
             detail="Missing fields. Expected: { message: string }",
         )
 
+    team_doc = await db["teams"].find_one({"team_name": team_id})
+    if not team_doc or not team_doc.get("qualified", False):
+        raise HTTPException(
+            status_code=403,
+            detail="Not qualified for Round 2."
+        )
+
     # Retrieve (or initialise) the team's continuous round-2 session
     session = session_store.r2_get_session(team_id)
     current_stage: int = session["current_stage"]
@@ -189,6 +196,7 @@ async def round2_chat(
 async def round2_submit_flag(
     payload: Round2FlagRequest,
     team_id: str = Depends(get_current_team),
+    db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> Round2FlagResponse:
     """
     Compare the submitted flag against Stage 5's DETECTION_STRING.
@@ -201,6 +209,13 @@ async def round2_submit_flag(
         raise HTTPException(
             status_code=400,
             detail="Missing fields. Expected: { flag: string }",
+        )
+        
+    team_doc = await db["teams"].find_one({"team_name": team_id})
+    if not team_doc or not team_doc.get("qualified", False):
+        raise HTTPException(
+            status_code=403,
+            detail="Not qualified for Round 2."
         )
 
     final_flag = PERSONAS[TOTAL_STAGES]["DETECTION_STRING"]

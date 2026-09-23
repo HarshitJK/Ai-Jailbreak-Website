@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
+import { fetchRound1Timer } from "../lib/apiClient";
 export const challenges = [
   {
     title: "Must Be The Water...",
@@ -79,12 +80,67 @@ function Completion({ progress, onProceed }) {
 }
 
 
+function Round1Timer({ onTimeUp }) {
+  const [remaining, setRemaining] = useState(null);
+
+  useEffect(() => {
+    let intervalId;
+    let syncIntervalId;
+
+    const syncTimer = async () => {
+      try {
+        const { started_at, duration_seconds } = await fetchRound1Timer();
+        const startMs = new Date(started_at).getTime();
+        const nowMs = Date.now();
+        const elapsedSecs = Math.floor((nowMs - startMs) / 1000);
+        let rem = duration_seconds - elapsedSecs;
+        if (rem < 0) rem = 0;
+        setRemaining(rem);
+        if (rem <= 0) onTimeUp();
+      } catch (err) {
+        console.error("Failed to sync timer:", err);
+      }
+    };
+
+    syncTimer(); // initial sync
+
+    // decrement locally every second
+    intervalId = setInterval(() => {
+      setRemaining((prev) => {
+        if (prev === null) return null;
+        if (prev <= 1) {
+          onTimeUp();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    // resync with server every 30 seconds
+    syncIntervalId = setInterval(syncTimer, 30000);
+
+    return () => {
+      clearInterval(intervalId);
+      clearInterval(syncIntervalId);
+    };
+  }, [onTimeUp]);
+
+  if (remaining === null) return <div className="round-timer">Loading timer...</div>;
+  if (remaining === 0) return <div className="round-timer danger-text">TIME'S UP!</div>;
+
+  const m = Math.floor(remaining / 60).toString().padStart(2, "0");
+  const s = (remaining % 60).toString().padStart(2, "0");
+  return <div className="round-timer">TIME REMAINING: {m}:{s}</div>;
+}
+
+
 export default function Round1Page({
   team, progress, completed, active, messages, input, setInput, loading,
   currentDone, allDone, mobileNav, setMobileNav, jumpToChallenge, submitPrompt, logout, onProceed
 }) {
   const activeChallenge = challenges[active];
   const inputRef = React.useRef(null);
+  const [timeUp, setTimeUp] = useState(false);
 
   React.useEffect(() => {
     if (!loading && !currentDone && inputRef.current) {
@@ -141,7 +197,10 @@ export default function Round1Page({
             <div className="eyebrow">AI JAILBREAK 2026</div>
             <h1>Prompt Heist</h1>
           </div>
-          <div className="team-chip">{team}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+            <Round1Timer onTimeUp={() => setTimeUp(true)} />
+            <div className="team-chip">{team}</div>
+          </div>
         </header>
 
         <div className="chat-scroll-area">
@@ -208,7 +267,7 @@ export default function Round1Page({
                   <textarea
                     ref={inputRef}
                     value={input}
-                    disabled={loading || currentDone}
+                    disabled={loading || currentDone || timeUp}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && !e.shiftKey) {
@@ -222,7 +281,7 @@ export default function Round1Page({
                   <button
                     className="send-btn modern"
                     onClick={submitPrompt}
-                    disabled={!input.trim() || loading || currentDone}
+                    disabled={!input.trim() || loading || currentDone || timeUp}
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>
                   </button>

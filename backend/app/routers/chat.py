@@ -9,7 +9,7 @@ not from the request body — removes the spoofing risk.
 """
 
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from motor.motor_asyncio import AsyncIOMotorDatabase
@@ -100,6 +100,34 @@ async def _mark_stage_complete_in_db(
         pass
 
 
+class TimerResponse(BaseModel):
+    started_at: datetime
+    duration_seconds: int
+
+@router.get("/api/round1/timer")
+async def get_round1_timer(
+    team_id: str = Depends(get_current_team),
+    db: AsyncIOMotorDatabase = Depends(get_db),
+) -> TimerResponse:
+    team_doc = await db["teams"].find_one({"team_name": team_id})
+    if not team_doc:
+        raise HTTPException(status_code=404, detail="Team not found.")
+
+    started_at = team_doc.get("round1_started_at")
+    if not started_at:
+        started_at = datetime.now(timezone.utc)
+        await db["teams"].update_one(
+            {"team_name": team_id},
+            {"$set": {"round1_started_at": started_at}}
+        )
+    elif started_at.tzinfo is None:
+        started_at = started_at.replace(tzinfo=timezone.utc)
+
+    return TimerResponse(
+        started_at=started_at,
+        duration_seconds=2700, # 45 minutes
+    )
+
 @router.post("/api/chat")
 async def chat_endpoint(
     payload: ChatRequest,
@@ -133,6 +161,16 @@ async def chat_endpoint(
             status_code=403,
             detail=f"Stage {stage_raw + 1} is locked. You must complete the previous stages first."
         )
+
+    # Check timer (45 minutes)
+    started_at = team_doc.get("round1_started_at")
+    if started_at:
+        elapsed = (datetime.now(timezone.utc) - started_at.replace(tzinfo=timezone.utc)).total_seconds()
+        if elapsed > 2700:
+            raise HTTPException(
+                status_code=403,
+                detail="Time's up! 45 minutes have elapsed."
+            )
 
     # Frontend sends 0-indexed; convert to 1-indexed for persona lookup
     stage_num = stage_raw + 1  # 1–5

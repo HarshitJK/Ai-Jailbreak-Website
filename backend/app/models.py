@@ -53,8 +53,10 @@ class TeamInDB(BaseModel):
     email: str
     password_hash: str
     session_token: Optional[str] = None
+    round1_started_at: Optional[datetime] = None
     round1_stage: int = 0
     round1_complete_at: Optional[datetime] = None
+    qualified: bool = False
     round2_stage: int = 0
     round2_complete_at: Optional[datetime] = None
     score: int = 0

@@ -280,3 +280,46 @@ export async function adminAdvanceTeam(
     { round, target_stage: targetStage }
   );
 }
+
+// ── Timer API ─────────────────────────────────────────────────────────────────
+
+export interface TimerResponse {
+  started_at: string;
+  duration_seconds: number;
+}
+
+export async function fetchRound1Timer(): Promise<TimerResponse> {
+  return apiGet<TimerResponse>("/api/round1/timer");
+}
+
+// ── Leaderboard & Management APIs ─────────────────────────────────────────────
+
+export async function fetchLeaderboardR1(): Promise<AdminTeam[]> {
+  return apiGet<AdminTeam[]>("/api/admin/leaderboard/round1", { "X-Admin-Secret": ADMIN_SECRET });
+}
+
+export async function fetchLeaderboardR2(): Promise<AdminTeam[]> {
+  return apiGet<AdminTeam[]>("/api/admin/leaderboard/round2", { "X-Admin-Secret": ADMIN_SECRET });
+}
+
+export async function qualifyTeam(teamId: string): Promise<{ ok: boolean, qualified: boolean }> {
+  return apiPost<{ ok: boolean, qualified: boolean }>(
+    `/api/admin/teams/${encodeURIComponent(teamId)}/qualify`,
+    {}
+  );
+}
+
+export async function deleteTeam(teamId: string): Promise<{ ok: boolean }> {
+  // Use apiGet style but with DELETE method or add a custom fetch.
+  // Wait, there's no apiDelete helper. Let's just use raw fetch or add apiDelete.
+  const res = await fetch(`${API_BASE}/api/admin/teams/${encodeURIComponent(teamId)}`, {
+    method: "DELETE",
+    headers: { "X-Admin-Secret": ADMIN_SECRET },
+    credentials: "include" // or "include" depending on backend auth logic, admin uses both
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Failed to delete team: ${res.status} ${text}`);
+  }
+  return res.json();
+}
