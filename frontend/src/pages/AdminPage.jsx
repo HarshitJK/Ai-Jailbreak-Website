@@ -25,7 +25,7 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { fetchAdminTeams, fetchTeamLogs, adminLogin, adminLogout, adminAdvanceTeam, forceCompleteR1, unlockRound2ForAll } from "../lib/apiClient";
+import { fetchAdminTeams, fetchTeamLogs, adminLogin, adminLogout, adminAdvanceTeam, forceCompleteR1, unlockRound2ForAll, startRound2, stopRound2, fetchRound2Status } from "../lib/apiClient";
 
 // ── Small shared UI atoms ─────────────────────────────────────────────────────
 
@@ -631,6 +631,7 @@ export default function AdminPage() {
   const [teams, setTeams] = useState([]);
   const [teamsLoading, setTeamsLoading] = useState(true);
   const [teamsError, setTeamsError] = useState("");
+  const [round2GlobalOpen, setRound2GlobalOpen] = useState(false);
 
   // For the transcript viewer
   const [transcriptTeam, setTranscriptTeam] = useState("");
@@ -642,6 +643,8 @@ export default function AdminPage() {
     try {
       const data = await fetchAdminTeams();
       setTeams(data);
+      const r2Status = await fetchRound2Status();
+      setRound2GlobalOpen(r2Status.round2_open);
       // Pre-select first team for the transcript viewer if none chosen yet
       if (data.length > 0 && !transcriptTeam) {
         setTranscriptTeam(data[0].team_name);
@@ -727,6 +730,22 @@ export default function AdminPage() {
       await loadTeams();
     } catch (err) {
       setNotice(`Failed to unlock Round 2: ${err.message}`);
+    }
+  }
+
+  async function toggleGlobalRound2() {
+    try {
+      if (round2GlobalOpen) {
+        await stopRound2();
+        setRound2GlobalOpen(false);
+        setNotice("Round 2 has been STOPPED globally.");
+      } else {
+        await startRound2();
+        setRound2GlobalOpen(true);
+        setNotice("Round 2 has been STARTED globally.");
+      }
+    } catch (err) {
+      setNotice(`Failed to toggle Round 2: ${err.message}`);
     }
   }
 
@@ -835,6 +854,13 @@ export default function AdminPage() {
               />
             </div>
             <div className="control-actions">
+              <button
+                className={`admin-btn ${round2GlobalOpen ? "secondary" : "primary"}`}
+                style={round2GlobalOpen ? { borderColor: '#ef4444', color: '#ef4444' } : { backgroundColor: '#3b82f6', borderColor: '#3b82f6' }}
+                onClick={toggleGlobalRound2}
+              >
+                {round2GlobalOpen ? "Stop Round 2" : "Start Round 2"}
+              </button>
               <button className="admin-btn secondary" onClick={() => setSection("round1")}>Manage Qualification</button>
               <button className="admin-btn secondary" onClick={loadTeams}>↺ Refresh Data</button>
               <button

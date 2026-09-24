@@ -57,6 +57,7 @@ export interface AuthResponse {
 export interface MeResponse {
   team_id: string;
   team_name: string;
+  qualified?: boolean;
 }
 
 // ── Admin auth types ──────────────────────────────────────────────────────────
@@ -106,6 +107,9 @@ export interface Round2ChatResponse {
   stageComplete: boolean;
   currentStage: number;          // 1-indexed, reflects stage AFTER any advance
   systemMessage: string | null;  // non-null when a stage transition occurred
+  stage_cleared?: boolean;
+  next_stage?: number | null;
+  round2_complete?: boolean;
 }
 
 export interface Round2FlagRequest {
@@ -122,7 +126,8 @@ export interface Round2FlagResponse {
 async function apiPost<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     method: "POST",
-    credentials: "include",  // send session cookie automatically
+    credentials: "include",
+    cache: "no-store",  // send session cookie automatically
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
@@ -139,7 +144,8 @@ async function apiPost<T>(path: string, body: unknown): Promise<T> {
 async function apiGet<T>(path: string, extraHeaders: Record<string, string> = {}): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     method: "GET",
-    credentials: "include",  // send session cookie automatically
+    credentials: "include",
+    cache: "no-store",  // send session cookie automatically
     headers: {
       "Content-Type": "application/json",
       ...extraHeaders,
@@ -354,4 +360,16 @@ export async function unlockRound2ForAll(): Promise<{ ok: boolean; teams_unlocke
     `/api/admin/unlock-round2`,
     {}
   );
+}
+
+export async function startRound2(): Promise<{ ok: boolean, round2_open: boolean }> {
+  return apiPost<{ ok: boolean, round2_open: boolean }>("/api/admin/round2/start", {});
+}
+
+export async function stopRound2(): Promise<{ ok: boolean, round2_open: boolean }> {
+  return apiPost<{ ok: boolean, round2_open: boolean }>("/api/admin/round2/stop", {});
+}
+
+export async function fetchRound2Status(): Promise<{ round2_open: boolean }> {
+  return apiGet<{ round2_open: boolean }>("/api/round2/status");
 }

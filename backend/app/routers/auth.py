@@ -134,14 +134,18 @@ async def logout(response: Response):
 class MeResponse(BaseModel):
     team_id: str
     team_name: str
+    qualified: bool = False
 
 
 @router.get("/api/me", response_model=MeResponse)
 async def me(
     team_id: str = Depends(get_current_team),
+    db: AsyncIOMotorDatabase = Depends(get_db),
 ):
     """
     Return current player's identity from the session cookie.
     Returns 401 if not logged in or if session is expired.
     """
-    return MeResponse(team_id=team_id, team_name=team_id)
+    team_doc = await db["teams"].find_one({"team_name": team_id})
+    qualified = team_doc.get("qualified", False) if team_doc else False
+    return MeResponse(team_id=team_id, team_name=team_id, qualified=qualified)

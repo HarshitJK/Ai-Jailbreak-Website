@@ -58,6 +58,9 @@ class Round2ChatResponse(BaseModel):
     stageComplete: bool
     currentStage: int          # 1-indexed stage AFTER any advance
     systemMessage: Optional[str] = None   # non-null when a stage transition occurred
+    stage_cleared: bool = False
+    next_stage: Optional[int] = None
+    round2_complete: bool = False
 
 
 class Round2FlagRequest(BaseModel):
@@ -119,6 +122,13 @@ async def _mark_stage_complete_in_db(
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
+@router.get("/api/round2/status")
+async def get_round2_status(db: AsyncIOMotorDatabase = Depends(get_db)):
+    settings = await db["settings"].find_one({"_id": "global_settings"})
+    round2_open = settings.get("round2_open", False) if settings else False
+    return {"round2_open": round2_open}
+
+
 @router.post("/api/round2/chat")
 async def round2_chat(
     payload: Round2ChatRequest,
@@ -131,6 +141,14 @@ async def round2_chat(
         raise HTTPException(
             status_code=400,
             detail="Missing fields. Expected: { message: string }",
+        )
+
+    settings = await db["settings"].find_one({"_id": "global_settings"})
+    round2_open = settings.get("round2_open", False) if settings else False
+    if not round2_open:
+        raise HTTPException(
+            status_code=403,
+            detail="Round 2 hasn't started yet."
         )
 
     team_doc = await db["teams"].find_one({"team_name": team_id})
@@ -199,6 +217,9 @@ async def round2_chat(
         stageComplete=stage_complete,
         currentStage=current_stage,
         systemMessage=system_message,
+        stage_cleared=stage_complete,
+        next_stage=current_stage if (stage_complete and not (stage_complete and current_stage == TOTAL_STAGES and system_message is None)) else None,
+        round2_complete=(stage_complete and current_stage == TOTAL_STAGES and system_message is None)
     )
 
 

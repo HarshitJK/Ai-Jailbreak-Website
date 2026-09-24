@@ -1,4 +1,4 @@
-﻿"""
+"""
 Admin router.
 
 Authentication:
@@ -426,3 +426,31 @@ async def unlock_round2_for_all(
         {"$set": {"qualified": True}}
     )
     return {"ok": True, "teams_unlocked": result.modified_count}
+
+@router.post("/api/admin/round2/start")
+async def start_round2(
+    request: Request,
+    x_admin_secret: Optional[str] = Header(default=None),
+    db: AsyncIOMotorDatabase = Depends(get_db),
+):
+    _require_admin(request, x_admin_secret)
+    await db["settings"].update_one(
+        {"_id": "global_settings"},
+        {"$set": {"round2_open": True}},
+        upsert=True
+    )
+    return {"ok": True, "round2_open": True}
+
+@router.post("/api/admin/round2/stop")
+async def stop_round2(
+    request: Request,
+    x_admin_secret: Optional[str] = Header(default=None),
+    db: AsyncIOMotorDatabase = Depends(get_db),
+):
+    _require_admin(request, x_admin_secret)
+    await db["settings"].update_one(
+        {"_id": "global_settings"},
+        {"$set": {"round2_open": False}},
+        upsert=True
+    )
+    return {"ok": True, "round2_open": False}

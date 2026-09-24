@@ -90,6 +90,7 @@ async def _mark_stage_complete_in_db(
         update_fields: Dict = {"round1_stage": stage_num}
         if stage_num >= TOTAL_STAGES:
             update_fields["round1_complete_at"] = datetime.now(timezone.utc)
+            update_fields["qualified"] = True
 
         await db["teams"].update_one(
             {"team_name": team_id},
