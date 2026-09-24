@@ -6,7 +6,7 @@ import "./party.css";
 import { launchPartyEffect } from "./party.js";
 
 import LoginPage, { overview } from "./pages/LoginPage";
-import { sendChatMessage, registerTeam, loginTeam, logoutTeam, getMe, adminLogin, adminLogout, fetchRound1History } from "./lib/apiClient";
+import { sendChatMessage, registerTeam, loginTeam, logoutTeam, getMe, adminLogin, adminLogout, fetchRound1History, resetStageChat } from "./lib/apiClient";
 import Round1Page, { challenges, Brand } from "./pages/Round1Page";
 import AdminPage, { AdminLoginPage } from "./pages/AdminPage";
 import Round2Page from "./round2/Round2Page";
@@ -94,40 +94,40 @@ function App() {
     if (saved) setStoredAccount(JSON.parse(saved));
   }, []);
 
+  // Load history whenever the active stage changes OR when we have an account (covers page reload)
   useEffect(() => {
-    if (participantAuthenticated) {
-      setLoading(true);
-      fetchRound1History(active)
-        .then((logs) => {
-          if (logs.length === 0) {
-            setMessagesByStage(prev => ({
-              ...prev,
-              [active]: [{
-                id: "control-0",
-                side: "control",
-                text: `Challenge ${String(active + 1).padStart(2, "0")}: ${challenges[active].title}\n\n${challenges[active].goal}`
-              }]
-            }));
-          } else {
-            const mapped = logs.map((log, i) => ({
-              id: `log-${i}`,
-              side: log.role === "user" ? "user" : "control",
-              text: log.message
-            }));
-            setMessagesByStage(prev => ({
-              ...prev,
-              [active]: mapped
-            }));
-          }
-        })
-        .catch((err) => {
-          console.error("Failed to load history:", err);
-        })
-        .finally(() => {
-          setLoading(false);
-        });
-    }
-  }, [active, participantAuthenticated]);
+    if (!storedAccount) return;  // not logged in yet
+    setLoading(true);
+    fetchRound1History(active)
+      .then((logs) => {
+        if (logs.length === 0) {
+          setMessagesByStage(prev => ({
+            ...prev,
+            [active]: [{
+              id: "control-0",
+              side: "control",
+              text: `Challenge ${String(active + 1).padStart(2, "0")}: ${challenges[active].title}\n\n${challenges[active].goal}`
+            }]
+          }));
+        } else {
+          const mapped = logs.map((log, i) => ({
+            id: `log-${i}`,
+            side: log.role === "user" ? "user" : "control",
+            text: log.message
+          }));
+          setMessagesByStage(prev => ({
+            ...prev,
+            [active]: mapped
+          }));
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to load history:", err);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, [active, storedAccount]);
 
   const currentDone = completed.includes(active);
   const allDone     = completed.length === 5;
@@ -253,6 +253,42 @@ function App() {
     navigate("/login");
   }
 
+  async function resetChat() {
+    if (loading) return;
+    if (!window.confirm("Reset chat history for this stage? Your progress on this stage will be lost.")) return;
+    setLoading(true);
+    try {
+      await resetStageChat(active);
+      // Remove from completed list if it was done
+      setCompleted(prev => prev.filter(i => i !== active));
+      // Reload history (will show the intro message)
+      const logs = await fetchRound1History(active);
+      if (logs.length === 0) {
+        setMessagesByStage(prev => ({
+          ...prev,
+          [active]: [{
+            id: "control-0",
+            side: "control",
+            text: `Challenge ${String(active + 1).padStart(2, "0")}: ${challenges[active].title}\n\n${challenges[active].goal}`
+          }]
+        }));
+      } else {
+        setMessagesByStage(prev => ({
+          ...prev,
+          [active]: logs.map((log, i) => ({
+            id: `log-${i}`,
+            side: log.role === "user" ? "user" : "control",
+            text: log.message
+          }))
+        }));
+      }
+    } catch (err) {
+      console.error("Failed to reset stage:", err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   function jumpToChallenge(index) {
     if (index > completed.length) return;
     setActive(index);
@@ -280,6 +316,7 @@ function App() {
               loading={loading} currentDone={currentDone} allDone={allDone}
               mobileNav={mobileNav} setMobileNav={setMobileNav}
               jumpToChallenge={jumpToChallenge} submitPrompt={submitPrompt} logout={logout}
+              resetChat={resetChat}
               onProceed={() => navigate("/round-2")}
             />
           </ProtectedRoute>

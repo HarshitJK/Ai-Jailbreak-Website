@@ -167,7 +167,7 @@ export default function LoginPage({
           )}
 
           {error && (
-            <div className={error.includes("created") ? "form-message success" : "form-message"}>
+            <div className={error.includes("successful") ? "form-message success" : "form-message"}>
               {error}
             </div>
           )}

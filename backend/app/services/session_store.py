@@ -89,6 +89,14 @@ def is_stage_complete(team_id: str, stage: int) -> bool:
     return stage in _completed_stages.get(team_id, set())
 
 
+def clear_stage(team_id: str, stage: int) -> None:
+    """Clears history and completion status for a single stage (for reset)."""
+    key = _key(team_id, stage)
+    _store.pop(key, None)
+    if team_id in _completed_stages:
+        _completed_stages[team_id].discard(stage)
+
+
 def clear_team(team_id: str) -> None:
     """Clears all round-1 and round-2 data for a team (e.g. on logout)."""
     # Remove all round-1 keys matching this teamId

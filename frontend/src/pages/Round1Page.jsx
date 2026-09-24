@@ -51,20 +51,46 @@ export function Brand({ compact = false }) {
 }
 
 
-export function alertRules() {
-  window.alert(
-    `RULES
+const RULES = [
+  "Team size: 1-2 participants.",
+  "Each participant can be part of only one team.",
+  "Complete challenges in strict order.",
+  "Do not share answers with other teams.",
+  "Do not interfere with another team's challenge.",
+  "Scoring is based on completed challenges, with time used as the tie-breaker.",
+  "Cheating or rule violations result in disqualification.",
+  "Judges' decision is final.",
+];
 
-1. Team size: 1-2 participants.
-2. Each participant can be part of only one team.
-3. Complete challenges in strict order.
-4. Do not share answers with other teams.
-5. Do not interfere with another team's challenge.
-6. Scoring is based on completed challenges, with time used as the tie-breaker.
-7. Cheating or rule violations result in disqualification.
-8. Judges' decision is final.`
+function RulesModal({ onClose }) {
+  return (
+    <div className="rules-overlay" onClick={onClose}>
+      <div className="rules-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="rules-modal-header">
+          <div className="rules-modal-eyebrow">PROMPT HEIST 2026</div>
+          <h2 className="rules-modal-title">Competition Rules</h2>
+          <button className="rules-close-btn" onClick={onClose} aria-label="Close rules">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+        <ol className="rules-list">
+          {RULES.map((rule, i) => (
+            <li key={i} className="rules-item">
+              <span className="rules-num">{String(i + 1).padStart(2, "0")}</span>
+              <span>{rule}</span>
+            </li>
+          ))}
+        </ol>
+        <div className="rules-modal-footer">
+          <button className="primary-btn small" onClick={onClose}>Got it</button>
+        </div>
+      </div>
+    </div>
   );
 }
+
 
 function Completion({ progress, onProceed }) {
   return (
@@ -136,11 +162,18 @@ function Round1Timer({ onTimeUp }) {
 
 export default function Round1Page({
   team, progress, completed, active, messages, input, setInput, loading,
-  currentDone, allDone, mobileNav, setMobileNav, jumpToChallenge, submitPrompt, logout, onProceed
+  currentDone, allDone, mobileNav, setMobileNav, jumpToChallenge, submitPrompt, logout, onProceed, resetChat
 }) {
   const activeChallenge = challenges[active];
   const inputRef = React.useRef(null);
+  const bottomRef = React.useRef(null);
   const [timeUp, setTimeUp] = useState(false);
+  const [showRules, setShowRules] = useState(false);
+
+  // Auto-scroll to bottom whenever messages update or loading state changes
+  React.useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, loading]);
 
   React.useEffect(() => {
     if (!loading && !currentDone && inputRef.current) {
@@ -150,6 +183,7 @@ export default function Round1Page({
 
   return (
     <main className="challenge-page">
+      {showRules && <RulesModal onClose={() => setShowRules(false)} />}
       {mobileNav && <div className="mobile-backdrop" onClick={() => setMobileNav(false)} />}
 
       <aside className={mobileNav ? "sidebar open" : "sidebar"}>
@@ -186,7 +220,7 @@ export default function Round1Page({
         </nav>
 
         <div className="sidebar-bottom">
-          <button onClick={() => alertRules()}>Rules</button>
+          <button onClick={() => setShowRules(true)}>Rules</button>
           <button onClick={logout}>Logout</button>
         </div>
       </aside>
@@ -208,8 +242,21 @@ export default function Round1Page({
             {!allDone ? (
               <>
                 {/* Challenge metadata strip */}
-                <div className="challenge-label">
-                  Challenge {String(active + 1).padStart(2, "0")} {activeChallenge.title}
+                <div className="challenge-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span>Challenge {String(active + 1).padStart(2, "00")} {activeChallenge.title}</span>
+                  <button
+                    className="reset-chat-btn"
+                    onClick={resetChat}
+                    disabled={loading}
+                    title="Reset chat history for this stage"
+                    aria-label="Reset chat"
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="1 4 1 10 7 10" /><polyline points="23 20 23 14 17 14" />
+                      <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10M23 14l-4.64 4.36A9 9 0 0 1 3.51 15" />
+                    </svg>
+                    Reset Chat
+                  </button>
                 </div>
 
                 <div className="messages">
@@ -233,6 +280,7 @@ export default function Round1Page({
                       </div>
                     </div>
                   )}
+                  <div ref={bottomRef} />
                 </div>
               </>
             ) : (

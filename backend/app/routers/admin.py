@@ -1,4 +1,4 @@
-"""
+﻿"""
 Admin router.
 
 Authentication:
@@ -359,6 +359,8 @@ async def toggle_qualify_team(
     return {"ok": True, "qualified": new_status}
 
 
+
+
 @router.delete("/api/admin/teams/{team_id}")
 async def delete_team(
     team_id: str,
@@ -367,11 +369,60 @@ async def delete_team(
     db: AsyncIOMotorDatabase = Depends(get_db),
 ):
     _require_admin(request, x_admin_secret)
-    # Delete team record
     result = await db["teams"].delete_one({"team_name": team_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Team not found")
-    
-    # Cascade delete chat logs
     await db["chat_logs"].delete_many({"team_id": team_id})
     return {"ok": True}
+
+
+@router.post("/api/admin/teams/{team_id}/force-complete-r1")
+async def force_complete_round1(
+    team_id: str,
+    request: Request,
+    x_admin_secret: Optional[str] = Header(default=None),
+    db: AsyncIOMotorDatabase = Depends(get_db),
+) -> dict:
+    """
+    Force-completes all 5 Round 1 stages for a single team.
+    Sets round1_stage=5, round1_complete_at=now, qualified=True.
+    """
+    _require_admin(request, x_admin_secret)
+    now = datetime.now(timezone.utc)
+    result = await db["teams"].update_one(
+        {"team_name": team_id},
+        {"$set": {
+            "round1_stage": 5,
+            "round1_complete_at": now,
+            "qualified": True,
+        }}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Team not found")
+    await db["chat_logs"].insert_one({
+        "team_id": team_id,
+        "round": 1,
+        "stage": 5,
+        "role": "system",
+        "message": "Admin force-completed all Round 1 stages.",
+        "timestamp": now,
+    })
+    return {"ok": True, "team_id": team_id}
+
+
+@router.post("/api/admin/unlock-round2")
+async def unlock_round2_for_all(
+    request: Request,
+    x_admin_secret: Optional[str] = Header(default=None),
+    db: AsyncIOMotorDatabase = Depends(get_db),
+) -> dict:
+    """
+    Qualifies every registered team for Round 2 in one shot.
+    Sets qualified=True for all teams regardless of Round 1 progress.
+    """
+    _require_admin(request, x_admin_secret)
+    result = await db["teams"].update_many(
+        {},
+        {"$set": {"qualified": True}}
+    )
+    return {"ok": True, "teams_unlocked": result.modified_count}

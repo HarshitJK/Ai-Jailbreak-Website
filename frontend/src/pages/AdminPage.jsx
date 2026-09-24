@@ -25,7 +25,7 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { fetchAdminTeams, fetchTeamLogs, adminLogin, adminLogout, adminAdvanceTeam } from "../lib/apiClient";
+import { fetchAdminTeams, fetchTeamLogs, adminLogin, adminLogout, adminAdvanceTeam, forceCompleteR1, unlockRound2ForAll } from "../lib/apiClient";
 
 // ── Small shared UI atoms ─────────────────────────────────────────────────────
 
@@ -430,46 +430,39 @@ function AdminTranscript({ teams, transcriptTeam, setTranscriptTeam }) {
   );
 }
 
-function AdminLeaderboard({ onSelectTeam }) {
+function AdminLeaderboard({ teams, onSelectTeam, onForceCompleteR1, onRefresh }) {
   const [tab, setTab] = useState("round1");
-  const [r1Teams, setR1Teams] = useState([]);
-  const [r2Teams, setR2Teams] = useState([]);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    let active = true;
-    const load = async () => {
-      setLoading(true);
-      try {
-        const { fetchLeaderboardR1, fetchLeaderboardR2 } = await import("../lib/apiClient");
-        const [r1, r2] = await Promise.all([fetchLeaderboardR1(), fetchLeaderboardR2()]);
-        if (active) {
-          setR1Teams(r1);
-          setR2Teams(r2);
-        }
-      } catch (err) {
-        console.error("Failed to load leaderboards", err);
-      } finally {
-        if (active) setLoading(false);
-      }
-    };
-    load();
-    return () => { active = false; };
-  }, []);
+  // Sort round1: most stages first, then by completion time ascending
+  const r1Teams = [...teams].sort((a, b) => {
+    if (b.round1_stage !== a.round1_stage) return b.round1_stage - a.round1_stage;
+    if (a.round1_complete_at && b.round1_complete_at) return new Date(a.round1_complete_at) - new Date(b.round1_complete_at);
+    if (a.round1_complete_at) return -1;
+    if (b.round1_complete_at) return 1;
+    return 0;
+  });
 
-  if (loading) return <section className="admin-panel"><div className="admin-chat-note">Loading leaderboard...</div></section>;
+  // Round 2: only qualified, sort by r2 stage then completion
+  const r2Teams = [...teams].filter(t => t.qualified).sort((a, b) => {
+    if (b.round2_stage !== a.round2_stage) return b.round2_stage - a.round2_stage;
+    if (a.round2_complete_at && b.round2_complete_at) return new Date(a.round2_complete_at) - new Date(b.round2_complete_at);
+    if (a.round2_complete_at) return -1;
+    if (b.round2_complete_at) return 1;
+    return 0;
+  });
 
   const currentTeams = tab === "round1" ? r1Teams : r2Teams;
 
   return (
     <section className="admin-panel">
       <SectionTitle kicker="TEAMS & LEADERBOARD" title="Live leaderboard" />
-      <div style={{ display: "flex", gap: "1rem", marginBottom: "1rem" }}>
+      <div style={{ display: "flex", gap: "1rem", marginBottom: "1rem", alignItems: "center" }}>
         <button className={`admin-btn ${tab === 'round1' ? 'primary' : 'secondary'}`} onClick={() => setTab("round1")}>Round 1</button>
         <button className={`admin-btn ${tab === 'round2' ? 'primary' : 'secondary'}`} onClick={() => setTab("round2")}>Round 2</button>
+        <button className="admin-btn secondary" style={{ marginLeft: "auto" }} onClick={onRefresh}>↺ Refresh</button>
       </div>
-      <p className="panel-note">Click any team row to view detailed status, qualify, or delete.</p>
-      
+      <p className="panel-note">Click a team name to open details. Use <strong>Force R1 Complete</strong> to immediately complete all Round 1 stages for a team.</p>
+
       {currentTeams.length === 0 ? (
         <EmptyTeamsState />
       ) : (
@@ -477,21 +470,40 @@ function AdminLeaderboard({ onSelectTeam }) {
           <table className="admin-table">
             <thead>
               <tr>
-                <th>RANK</th><th>TEAM</th><th>R1 STAGES</th><th>R2 STAGES</th><th>STATUS</th>
+                <th>RANK</th><th>TEAM</th><th>R1 STAGES</th><th>R2 STAGES</th><th>STATUS</th>{tab === 'round1' && <th>ACTIONS</th>}
               </tr>
             </thead>
             <tbody>
               {currentTeams.map((team, i) => (
-                <tr key={team.team_name} onClick={() => onSelectTeam(team)} style={{cursor: 'pointer'}} className="hover-row">
+                <tr key={team.team_name}>
                   <td>#{i + 1}</td>
-                  <td>{team.team_name}</td>
-                  <td>{team.round1_stage}/5</td>
-                  <td>{team.qualified ? `${team.round2_stage}/5` : "—"}</td>
                   <td>
-                    {team.qualified ? <span className="table-ok">QUALIFIED</span> : 
-                     team.round1_complete_at ? "ROUND 1 COMPLETE" : 
+                    <button
+                      onClick={() => onSelectTeam(team)}
+                      style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', padding: 0, fontWeight: 600, fontSize: 'inherit' }}
+                    >
+                      {team.team_name}
+                    </button>
+                  </td>
+                  <td>{team.round1_stage}/5</td>
+                  <td>{team.qualified ? `${team.round2_stage}/5` : '—'}</td>
+                  <td>
+                    {team.qualified ? <span className="table-ok">QUALIFIED</span> :
+                     team.round1_complete_at ? 'ROUND 1 COMPLETE' :
                      <span className="muted-cell">IN PROGRESS</span>}
                   </td>
+                  {tab === 'round1' && (
+                    <td>
+                      <button
+                        className="admin-btn secondary"
+                        style={{ fontSize: '11px', padding: '4px 10px' }}
+                        disabled={team.round1_stage >= 5 && !!team.round1_complete_at}
+                        onClick={() => onForceCompleteR1(team.team_name)}
+                      >
+                        Force R1 Complete
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -697,6 +709,27 @@ export default function AdminPage() {
     }
   }
 
+  async function handleForceCompleteR1(teamName) {
+    try {
+      await forceCompleteR1(teamName);
+      setNotice(`✓ Force-completed all Round 1 stages for ${teamName}.`);
+      await loadTeams();
+    } catch (err) {
+      setNotice(`Failed to force-complete R1 for ${teamName}: ${err.message}`);
+    }
+  }
+
+  async function handleUnlockRound2ForAll() {
+    try {
+      const res = await unlockRound2ForAll();
+      setRound2Unlocked(true);
+      setNotice(`🔓 Round 2 unlocked for all teams (${res.teams_unlocked} team(s) updated).`);
+      await loadTeams();
+    } catch (err) {
+      setNotice(`Failed to unlock Round 2: ${err.message}`);
+    }
+  }
+
   // ── Shared content area ──────────────────────────────────────────────────────
 
   function renderContent() {
@@ -711,7 +744,7 @@ export default function AdminPage() {
           />
         );
       case "leaderboard":
-        return <AdminLeaderboard onSelectTeam={setSelectedTeam} />;
+        return <AdminLeaderboard teams={teams} onSelectTeam={setSelectedTeam} onForceCompleteR1={handleForceCompleteR1} onRefresh={loadTeams} />;
       case "round1":
         return (
           <AdminRound1Qualification
@@ -804,6 +837,18 @@ export default function AdminPage() {
             <div className="control-actions">
               <button className="admin-btn secondary" onClick={() => setSection("round1")}>Manage Qualification</button>
               <button className="admin-btn secondary" onClick={loadTeams}>↺ Refresh Data</button>
+              <button
+                className="admin-btn primary"
+                style={{ backgroundColor: '#16a34a', borderColor: '#16a34a', minWidth: '200px' }}
+                onClick={() => {
+                  if (window.confirm('Unlock Round 2 for ALL registered teams? This qualifies every team regardless of their Round 1 progress.')) {
+                    handleUnlockRound2ForAll();
+                  }
+                }}
+                disabled={round2Unlocked}
+              >
+                {round2Unlocked ? '✓ Round 2 Unlocked' : '🔓 Unlock Round 2 for All'}
+              </button>
             </div>
           </section>
         </div>

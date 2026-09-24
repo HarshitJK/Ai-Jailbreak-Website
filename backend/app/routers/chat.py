@@ -250,3 +250,50 @@ async def get_round1_history(
         logs.append(ChatLogRow(**doc))
 
     return logs
+
+
+@router.delete("/api/round1/{stage}/reset")
+async def reset_stage_chat(
+    stage: int,
+    team_id: str = Depends(get_current_team),
+    db: AsyncIOMotorDatabase = Depends(get_db),
+) -> dict:
+    """
+    Reset the chat history for a specific Round 1 stage.
+    - Deletes all chat_logs for this team + stage from MongoDB.
+    - Clears in-memory history and completion flag for this stage.
+    - Decrements round1_stage in teams collection if needed so the stage
+      is no longer locked out.
+    stage param is 0-indexed (same as frontend convention).
+    """
+    if stage < 0 or stage >= TOTAL_STAGES:
+        raise HTTPException(status_code=400, detail="Invalid stage")
+
+    stage_num = stage + 1  # 1-indexed for DB and session_store
+
+    # Clear MongoDB logs for this stage
+    await db["chat_logs"].delete_many({
+        "team_id": team_id,
+        "round": 1,
+        "stage": stage_num,
+    })
+
+    # Clear in-memory history + completion flag
+    session_store.clear_stage(team_id, stage_num)
+
+    # Roll back round1_stage in the teams collection if they had completed this stage
+    team_doc = await db["teams"].find_one({"team_name": team_id})
+    if team_doc:
+        current_db_stage = team_doc.get("round1_stage", 0)
+        if current_db_stage >= stage_num:
+            # Reset progress back to previous stage (stage_num - 1)
+            new_stage = stage_num - 1
+            update = {"round1_stage": new_stage}
+            if new_stage < TOTAL_STAGES:
+                update["round1_complete_at"] = None
+            await db["teams"].update_one(
+                {"team_name": team_id},
+                {"$set": update}
+            )
+
+    return {"ok": True, "stage_reset": stage_num}

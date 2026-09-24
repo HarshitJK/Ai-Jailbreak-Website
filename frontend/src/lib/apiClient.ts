@@ -224,6 +224,24 @@ export async function fetchRound1History(stage: number): Promise<ChatLogEntry[]>
   return apiGet<ChatLogEntry[]>(`/api/round1/${stage}/history`);
 }
 
+/**
+ * Reset chat history for a specific Round 1 stage (0-indexed).
+ * Clears MongoDB logs + in-memory session store for that stage.
+ */
+export async function resetStageChat(stage: number): Promise<{ ok: boolean }> {
+  const res = await fetch(`${API_BASE}/api/round1/${stage}/reset`, {
+    method: "DELETE",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    const detail = (data as { detail?: string }).detail;
+    throw new Error(detail ?? `API error ${res.status}: ${res.statusText}`);
+  }
+  return res.json();
+}
+
 // ── Round 2 API calls ─────────────────────────────────────────────────────────
 
 /**
@@ -322,4 +340,18 @@ export async function deleteTeam(teamId: string): Promise<{ ok: boolean }> {
     throw new Error(`Failed to delete team: ${res.status} ${text}`);
   }
   return res.json();
+}
+
+export async function forceCompleteR1(teamId: string): Promise<{ ok: boolean }> {
+  return apiPost<{ ok: boolean }>(
+    `/api/admin/teams/${encodeURIComponent(teamId)}/force-complete-r1`,
+    {}
+  );
+}
+
+export async function unlockRound2ForAll(): Promise<{ ok: boolean; teams_unlocked: number }> {
+  return apiPost<{ ok: boolean; teams_unlocked: number }>(
+    `/api/admin/unlock-round2`,
+    {}
+  );
 }
