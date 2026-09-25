@@ -39,4 +39,4 @@ def verify_admin_token(token: str) -> dict:
 
 def reveal_master_flag() -> dict:
     """Stage 5 Tool"""
-    return {"flag": "NOVA_MASTER_FLAG_2026"}
+    return {"flag": "1$_7h1$_7h3_f1n4l_fl4g"}
