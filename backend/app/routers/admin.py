@@ -23,10 +23,11 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 from pydantic import BaseModel
 
 from app.db import get_db
+from app.services import session_store
 from app.services.jwt_auth import (
     get_current_admin,
     issue_admin_cookie,
-    clear_admin_cookie,
+    clear_admin_cookie
 )
 
 router = APIRouter()
@@ -53,8 +54,8 @@ async def admin_login(payload: AdminLoginRequest, response: Response):
     if not expected_username or not expected_password:
         raise HTTPException(
             status_code=503,
-            detail="Admin credentials are not configured on this server.",
-        )
+            detail="Admin credentials are not configured on this server."
+)
 
     if payload.username != expected_username or payload.password != expected_password:
         raise HTTPException(status_code=401, detail="Invalid admin credentials.")
@@ -69,51 +70,6 @@ async def admin_logout(response: Response):
     clear_admin_cookie(response)
     return {"ok": True}
 
-
-# ── Legacy header-based guard (kept for direct API tooling) ───────────────────
-
-def verify_admin_header(x_admin_secret: Optional[str] = Header(default=None)) -> None:
-    """
-    Legacy dependency: checks X-Admin-Secret header.
-    Still accepted by the data routes so that existing scripts keep working.
-    Kept as a fallback — not the primary auth path (cookie is preferred).
-    """
-    expected = os.getenv("ADMIN_SECRET", "")
-    if not expected:
-        raise HTTPException(
-            status_code=403,
-            detail="Admin access is not configured on this server.",
-        )
-    if x_admin_secret != expected:
-        raise HTTPException(
-            status_code=403,
-            detail="Invalid or missing admin secret.",
-        )
-
-
-def _require_admin(request: Request, x_admin_secret: Optional[str] = Header(default=None)) -> None:
-    """
-    Combined guard: accept either a valid admin_session cookie OR a valid X-Admin-Secret header.
-    This lets both the browser (cookie) and API scripts (header) work.
-    """
-    # Try cookie first
-    from app.services.jwt_auth import ADMIN_COOKIE_NAME, _decode
-    from jose import JWTError
-    token = request.cookies.get(ADMIN_COOKIE_NAME)
-    if token:
-        try:
-            payload = _decode(token)
-            if payload.get("role") == "admin":
-                return  # cookie auth OK
-        except (JWTError, Exception):
-            pass  # fall through to header check
-
-    # Fall back to header
-    expected = os.getenv("ADMIN_SECRET", "")
-    if expected and x_admin_secret == expected:
-        return  # header auth OK
-
-    raise HTTPException(status_code=401, detail="Admin authentication required.")
 
 
 # ── Response models ───────────────────────────────────────────────────────────
@@ -155,17 +111,15 @@ class ChatLogRow(BaseModel):
 @router.get(
     "/api/admin/teams",
     response_model=List[AdminTeamRow],
+    dependencies=[Depends(get_current_admin)]
 )
 async def list_teams(
-    request: Request,
-    x_admin_secret: Optional[str] = Header(default=None),
-    db: AsyncIOMotorDatabase = Depends(get_db),
+    db: AsyncIOMotorDatabase = Depends(get_db)
 ) -> List[AdminTeamRow]:
     """
     Return every team's live progress, sorted by team_name ascending.
     Returns an empty list (not an error) when no teams have registered yet.
     """
-    _require_admin(request, x_admin_secret)
 
     cursor = db["teams"].find(
         {},
@@ -180,8 +134,8 @@ async def list_teams(
             "round2_stage": 1,
             "round2_complete_at": 1,
             "score": 1,
-        },
-    ).sort("team_name", 1)
+        }
+).sort("team_name", 1)
 
     teams = []
     async for doc in cursor:
@@ -195,8 +149,8 @@ async def list_teams(
                 qualified=doc.get("qualified", False),
                 round2_stage=doc.get("round2_stage", 0),
                 round2_complete_at=doc.get("round2_complete_at"),
-                score=doc.get("score", 0),
-            )
+                score=doc.get("score", 0)
+)
         )
     return teams
 
@@ -204,19 +158,17 @@ async def list_teams(
 @router.get(
     "/api/admin/teams/{team_id}/logs",
     response_model=List[ChatLogRow],
+    dependencies=[Depends(get_current_admin)]
 )
 async def get_team_logs(
     team_id: str,
-    request: Request,
-    x_admin_secret: Optional[str] = Header(default=None),
-    db: AsyncIOMotorDatabase = Depends(get_db),
+    db: AsyncIOMotorDatabase = Depends(get_db)
 ) -> List[ChatLogRow]:
     """
     Return the full chat history for the given team (team_name string),
     ordered chronologically (timestamp ascending).
     Returns an empty list if the team has no chat history yet.
     """
-    _require_admin(request, x_admin_secret)
 
     cursor = db["chat_logs"].find(
         {"team_id": team_id},
@@ -227,8 +179,8 @@ async def get_team_logs(
             "role": 1,
             "message": 1,
             "timestamp": 1,
-        },
-    ).sort("timestamp", 1)
+        }
+).sort("timestamp", 1)
 
     logs: List[ChatLogRow] = []
     async for doc in cursor:
@@ -238,29 +190,27 @@ async def get_team_logs(
                 stage=doc["stage"],
                 role=doc["role"],
                 message=doc["message"],
-                timestamp=doc["timestamp"],
-            )
+                timestamp=doc["timestamp"]
+)
         )
     return logs
 
 
 from app.models import AdminAdvanceRequest
 from datetime import timezone
-from app.services import session_store
 
-@router.post("/api/admin/teams/{team_id}/advance")
+@router.post("/api/admin/teams/{team_id}/advance",
+    dependencies=[Depends(get_current_admin)]
+)
 async def admin_advance_team(
     team_id: str,
     payload: AdminAdvanceRequest,
-    request: Request,
-    x_admin_secret: Optional[str] = Header(default=None),
-    db: AsyncIOMotorDatabase = Depends(get_db),
+    db: AsyncIOMotorDatabase = Depends(get_db)
 ) -> dict:
     """
     Manually advance a team to a target stage without solving the challenge.
     Updates the stage tracker and logs the action to chat_logs.
     """
-    _require_admin(request, x_admin_secret)
 
     if payload.round not in (1, 2) or payload.target_stage < 1 or payload.target_stage > 5:
         raise HTTPException(status_code=400, detail="Invalid round or target_stage")
@@ -274,8 +224,7 @@ async def admin_advance_team(
         # If forcing to Stage N, it means they completed N - 1 stages
         stages_completed = payload.target_stage - 1
         update_fields["round1_stage"] = stages_completed
-        if payload.target_stage == 5 and False: # we only complete it if they actually finish 5
-            pass
+
         update_fields["round1_complete_at"] = None
         
     else:
@@ -327,13 +276,12 @@ async def admin_advance_team(
 
     return {"ok": True, "team_id": team_id, "round": payload.round, "target_stage": payload.target_stage}
 
-@router.get("/api/admin/leaderboard/round1", response_model=List[AdminTeamRow])
+@router.get("/api/admin/leaderboard/round1", response_model=List[AdminTeamRow],
+    dependencies=[Depends(get_current_admin)]
+)
 async def get_leaderboard_round1(
-    request: Request,
-    x_admin_secret: Optional[str] = Header(default=None),
-    db: AsyncIOMotorDatabase = Depends(get_db),
+    db: AsyncIOMotorDatabase = Depends(get_db)
 ):
-    _require_admin(request, x_admin_secret)
     cursor = db["teams"].find(
         {},
         {
@@ -349,13 +297,12 @@ async def get_leaderboard_round1(
     return teams
 
 
-@router.get("/api/admin/leaderboard/round2", response_model=List[AdminTeamRow])
+@router.get("/api/admin/leaderboard/round2", response_model=List[AdminTeamRow],
+    dependencies=[Depends(get_current_admin)]
+)
 async def get_leaderboard_round2(
-    request: Request,
-    x_admin_secret: Optional[str] = Header(default=None),
-    db: AsyncIOMotorDatabase = Depends(get_db),
+    db: AsyncIOMotorDatabase = Depends(get_db)
 ):
-    _require_admin(request, x_admin_secret)
     # Only return teams that are qualified
     cursor = db["teams"].find(
         {"qualified": True},
@@ -372,14 +319,13 @@ async def get_leaderboard_round2(
     return teams
 
 
-@router.post("/api/admin/teams/{team_id}/qualify")
+@router.post("/api/admin/teams/{team_id}/qualify",
+    dependencies=[Depends(get_current_admin)]
+)
 async def toggle_qualify_team(
     team_id: str,
-    request: Request,
-    x_admin_secret: Optional[str] = Header(default=None),
-    db: AsyncIOMotorDatabase = Depends(get_db),
+    db: AsyncIOMotorDatabase = Depends(get_db)
 ):
-    _require_admin(request, x_admin_secret)
     team_doc = await db["teams"].find_one({"team_name": team_id})
     if not team_doc:
         raise HTTPException(status_code=404, detail="Team not found")
@@ -394,14 +340,32 @@ async def toggle_qualify_team(
 
 
 
-@router.delete("/api/admin/teams/{team_id}")
+@router.delete("/api/admin/teams",
+    dependencies=[Depends(get_current_admin)]
+)
+async def delete_all_teams(
+    db: AsyncIOMotorDatabase = Depends(get_db)
+):
+    """
+    Permanently delete ALL teams and ALL chat logs.
+    This is a destructive, irreversible operation — admin use only.
+    """
+    teams_result = await db["teams"].delete_many({})
+    logs_result = await db["chat_logs"].delete_many({})
+    return {
+        "ok": True,
+        "teams_deleted": teams_result.deleted_count,
+        "logs_deleted": logs_result.deleted_count,
+    }
+
+
+@router.delete("/api/admin/teams/{team_id}",
+    dependencies=[Depends(get_current_admin)]
+)
 async def delete_team(
     team_id: str,
-    request: Request,
-    x_admin_secret: Optional[str] = Header(default=None),
-    db: AsyncIOMotorDatabase = Depends(get_db),
+    db: AsyncIOMotorDatabase = Depends(get_db)
 ):
-    _require_admin(request, x_admin_secret)
     result = await db["teams"].delete_one({"team_name": team_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Team not found")
@@ -409,18 +373,17 @@ async def delete_team(
     return {"ok": True}
 
 
-@router.post("/api/admin/teams/{team_id}/force-complete-r1")
+@router.post("/api/admin/teams/{team_id}/force-complete-r1",
+    dependencies=[Depends(get_current_admin)]
+)
 async def force_complete_round1(
     team_id: str,
-    request: Request,
-    x_admin_secret: Optional[str] = Header(default=None),
-    db: AsyncIOMotorDatabase = Depends(get_db),
+    db: AsyncIOMotorDatabase = Depends(get_db)
 ) -> dict:
     """
     Force-completes all 5 Round 1 stages for a single team.
     Sets round1_stage=5, round1_complete_at=now, qualified=True.
     """
-    _require_admin(request, x_admin_secret)
     now = datetime.now(timezone.utc)
     result = await db["teams"].update_one(
         {"team_name": team_id},
@@ -443,30 +406,28 @@ async def force_complete_round1(
     return {"ok": True, "team_id": team_id}
 
 
-@router.post("/api/admin/unlock-round2")
+@router.post("/api/admin/unlock-round2",
+    dependencies=[Depends(get_current_admin)]
+)
 async def unlock_round2_for_all(
-    request: Request,
-    x_admin_secret: Optional[str] = Header(default=None),
-    db: AsyncIOMotorDatabase = Depends(get_db),
+    db: AsyncIOMotorDatabase = Depends(get_db)
 ) -> dict:
     """
     Qualifies every registered team for Round 2 in one shot.
     Sets qualified=True for all teams regardless of Round 1 progress.
     """
-    _require_admin(request, x_admin_secret)
     result = await db["teams"].update_many(
         {},
         {"$set": {"qualified": True}}
     )
     return {"ok": True, "teams_unlocked": result.modified_count}
 
-@router.post("/api/admin/round2/start")
+@router.post("/api/admin/round2/start",
+    dependencies=[Depends(get_current_admin)]
+)
 async def start_round2(
-    request: Request,
-    x_admin_secret: Optional[str] = Header(default=None),
-    db: AsyncIOMotorDatabase = Depends(get_db),
+    db: AsyncIOMotorDatabase = Depends(get_db)
 ):
-    _require_admin(request, x_admin_secret)
     await db["settings"].update_one(
         {"_id": "global_settings"},
         {"$set": {"round2_open": True}},
@@ -474,13 +435,12 @@ async def start_round2(
     )
     return {"ok": True, "round2_open": True}
 
-@router.post("/api/admin/round2/stop")
+@router.post("/api/admin/round2/stop",
+    dependencies=[Depends(get_current_admin)]
+)
 async def stop_round2(
-    request: Request,
-    x_admin_secret: Optional[str] = Header(default=None),
-    db: AsyncIOMotorDatabase = Depends(get_db),
+    db: AsyncIOMotorDatabase = Depends(get_db)
 ):
-    _require_admin(request, x_admin_secret)
     await db["settings"].update_one(
         {"_id": "global_settings"},
         {"$set": {"round2_open": False}},

@@ -3,13 +3,16 @@ dist
 .DS_Store
 *.local
 CLAUDE.md
+*.log
+
+# Python
+__pycache__/
+*.pyc
 
 # Frontend (Vite)
 frontend/node_modules
 frontend/dist
 frontend/.env
 
-# Backend (Express/Node)
-backend/node_modules
-backend/dist
+# Backend (Python)
 backend/.env

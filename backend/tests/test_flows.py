@@ -4,12 +4,9 @@ from pymongo import MongoClient
 import os
 
 async def test():
-    admin_secret = "testadminsecret" # Need to check this
-    with open("backend/.env") as f:
-        for line in f:
-            if line.startswith("ADMIN_SECRET="):
-                admin_secret = line.strip().split("=")[1]
-                
+    admin_user = os.getenv("ADMIN_USERNAME", "admin")
+    admin_pass = os.getenv("ADMIN_PASSWORD", "admin")
+    
     base_url = "http://localhost:4000"
     
     async with httpx.AsyncClient(base_url=base_url) as client:
@@ -26,19 +23,25 @@ async def test():
                 "password": "pass"
             })
             
+        # Admin login to get session cookie
+        await client.post("/api/admin/login", json={
+            "username": admin_user,
+            "password": admin_pass
+        })
+
         # Check /api/me
         res = await client.get("/api/me")
         print("/api/me:", res.json())
         
         # Start Round 2
-        res = await client.post("/api/admin/round2/start", headers={"X-Admin-Secret": admin_secret})
+        res = await client.post("/api/admin/round2/start")
         print("Start Round 2:", res.json())
         
         # Try chat
         res = await client.post("/api/round2/chat", json={"message": "hello"})
         print("Chat (not qualified):", res.status_code, res.json())
         
-        res = await client.post(f"/api/admin/teams/{team_name}/qualify", headers={"X-Admin-Secret": admin_secret})
+        res = await client.post(f"/api/admin/teams/{team_name}/qualify")
         print("Qualify team:", res.json())
         
         # Check /api/me again
@@ -50,7 +53,7 @@ async def test():
         print("Chat (qualified, open):", res.status_code, res.json())
         
         # Stop Round 2
-        res = await client.post("/api/admin/round2/stop", headers={"X-Admin-Secret": admin_secret})
+        res = await client.post("/api/admin/round2/stop")
         print("Stop Round 2:", res.json())
         
         # Try chat again

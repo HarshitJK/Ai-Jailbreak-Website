@@ -2,6 +2,8 @@ import asyncio
 import os
 import sys
 
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from app.services.llm_client import call_llm
 from app.personas.round2 import stage1, stage2, stage3, stage4, stage5
 

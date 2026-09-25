@@ -17,10 +17,6 @@ const API_BASE: string =
   ((import.meta as unknown as { env: Record<string, string> }).env
     .VITE_API_BASE_URL ?? "http://localhost:4000");
 
-// Admin secret kept for direct API tooling (header-based fallback in backend)
-const ADMIN_SECRET: string =
-  ((import.meta as unknown as { env: Record<string, string> }).env
-    .VITE_ADMIN_SECRET ?? "");
 
 // ── Chat types (Round 1 — unchanged contract, team_id now optional) ───────────
 
@@ -279,7 +275,7 @@ export async function submitRound2Flag(
  * so both auth paths work depending on which is available.
  */
 export async function fetchAdminTeams(): Promise<AdminTeam[]> {
-  return apiGet<AdminTeam[]>("/api/admin/teams", { "X-Admin-Secret": ADMIN_SECRET });
+  return apiGet<AdminTeam[]>("/api/admin/teams");
 }
 
 /**
@@ -288,7 +284,6 @@ export async function fetchAdminTeams(): Promise<AdminTeam[]> {
 export async function fetchTeamLogs(teamId: string): Promise<ChatLogEntry[]> {
   return apiGet<ChatLogEntry[]>(
     `/api/admin/teams/${encodeURIComponent(teamId)}/logs`,
-    { "X-Admin-Secret": ADMIN_SECRET },
   );
 }
 
@@ -302,9 +297,7 @@ export async function adminAdvanceTeam(
 ): Promise<{ ok: boolean }> {
   return apiPost<{ ok: boolean }>(
     `/api/admin/teams/${encodeURIComponent(teamId)}/advance`,
-    { round, target_stage: targetStage },
-    { "X-Admin-Secret": ADMIN_SECRET }
-  );
+    { round, target_stage: targetStage });
 }
 
 // ── Timer API ─────────────────────────────────────────────────────────────────
@@ -321,19 +314,17 @@ export async function fetchRound1Timer(): Promise<TimerResponse> {
 // ── Leaderboard & Management APIs ─────────────────────────────────────────────
 
 export async function fetchLeaderboardR1(): Promise<AdminTeam[]> {
-  return apiGet<AdminTeam[]>("/api/admin/leaderboard/round1", { "X-Admin-Secret": ADMIN_SECRET });
+  return apiGet<AdminTeam[]>("/api/admin/leaderboard/round1");
 }
 
 export async function fetchLeaderboardR2(): Promise<AdminTeam[]> {
-  return apiGet<AdminTeam[]>("/api/admin/leaderboard/round2", { "X-Admin-Secret": ADMIN_SECRET });
+  return apiGet<AdminTeam[]>("/api/admin/leaderboard/round2");
 }
 
 export async function qualifyTeam(teamId: string): Promise<{ ok: boolean, qualified: boolean }> {
   return apiPost<{ ok: boolean, qualified: boolean }>(
     `/api/admin/teams/${encodeURIComponent(teamId)}/qualify`,
-    {},
-    { "X-Admin-Secret": ADMIN_SECRET }
-  );
+    {});
 }
 
 export async function deleteTeam(teamId: string): Promise<{ ok: boolean }> {
@@ -341,7 +332,6 @@ export async function deleteTeam(teamId: string): Promise<{ ok: boolean }> {
   // Wait, there's no apiDelete helper. Let's just use raw fetch or add apiDelete.
   const res = await fetch(`${API_BASE}/api/admin/teams/${encodeURIComponent(teamId)}`, {
     method: "DELETE",
-    headers: { "X-Admin-Secret": ADMIN_SECRET },
     credentials: "include" // or "include" depending on backend auth logic, admin uses both
   });
   if (!res.ok) {
@@ -351,28 +341,36 @@ export async function deleteTeam(teamId: string): Promise<{ ok: boolean }> {
   return res.json();
 }
 
+export async function deleteAllTeams(): Promise<{ ok: boolean; teams_deleted: number; logs_deleted: number }> {
+  const res = await fetch(`${API_BASE}/api/admin/teams`, {
+    method: "DELETE",
+    credentials: "include",
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Failed to delete all teams: ${res.status} ${text}`);
+  }
+  return res.json();
+}
+
 export async function forceCompleteR1(teamId: string): Promise<{ ok: boolean }> {
   return apiPost<{ ok: boolean }>(
     `/api/admin/teams/${encodeURIComponent(teamId)}/force-complete-r1`,
-    {},
-    { "X-Admin-Secret": ADMIN_SECRET }
-  );
+    {});
 }
 
 export async function unlockRound2ForAll(): Promise<{ ok: boolean; teams_unlocked: number }> {
   return apiPost<{ ok: boolean; teams_unlocked: number }>(
     `/api/admin/unlock-round2`,
-    {},
-    { "X-Admin-Secret": ADMIN_SECRET }
-  );
+    {});
 }
 
 export async function startRound2(): Promise<{ ok: boolean, round2_open: boolean }> {
-  return apiPost<{ ok: boolean, round2_open: boolean }>("/api/admin/round2/start", {}, { "X-Admin-Secret": ADMIN_SECRET });
+  return apiPost<{ ok: boolean, round2_open: boolean }>("/api/admin/round2/start", {});
 }
 
 export async function stopRound2(): Promise<{ ok: boolean, round2_open: boolean }> {
-  return apiPost<{ ok: boolean, round2_open: boolean }>("/api/admin/round2/stop", {}, { "X-Admin-Secret": ADMIN_SECRET });
+  return apiPost<{ ok: boolean, round2_open: boolean }>("/api/admin/round2/stop", {});
 }
 
 export async function fetchRound2Status(): Promise<{ round2_open: boolean }> {

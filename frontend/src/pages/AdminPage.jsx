@@ -25,7 +25,7 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { fetchAdminTeams, fetchTeamLogs, adminLogin, adminLogout, adminAdvanceTeam, forceCompleteR1, unlockRound2ForAll, startRound2, stopRound2, fetchRound2Status } from "../lib/apiClient";
+import { fetchAdminTeams, fetchTeamLogs, adminLogin, adminLogout, adminAdvanceTeam, forceCompleteR1, unlockRound2ForAll, startRound2, stopRound2, fetchRound2Status, deleteAllTeams } from "../lib/apiClient";
 
 // ── Small shared UI atoms ─────────────────────────────────────────────────────
 
@@ -630,6 +630,8 @@ export default function AdminPage() {
   const [round2Unlocked, setRound2Unlocked] = useState(false);
   const [confirmUnlockOpen, setConfirmUnlockOpen] = useState(false);
   const [confirmQualOpen, setConfirmQualOpen] = useState(false);
+  const [confirmDeleteAllOpen, setConfirmDeleteAllOpen] = useState(false);
+  const [deleteAllLoading, setDeleteAllLoading] = useState(false);
   const [notice, setNotice] = useState("");
   const [remaining, setRemaining] = useState(5076);
 
@@ -736,6 +738,21 @@ export default function AdminPage() {
       await loadTeams();
     } catch (err) {
       setNotice(`Failed to unlock Round 2: ${err.message}`);
+    }
+  }
+
+  async function handleDeleteAllTeams() {
+    setDeleteAllLoading(true);
+    try {
+      const res = await deleteAllTeams();
+      setConfirmDeleteAllOpen(false);
+      setTeams([]);
+      setTranscriptTeam("");
+      setNotice(`🗑️ All teams deleted — ${res.teams_deleted} team(s) and ${res.logs_deleted} chat log(s) removed.`);
+    } catch (err) {
+      setNotice(`Failed to delete all teams: ${err.message}`);
+    } finally {
+      setDeleteAllLoading(false);
     }
   }
 
@@ -881,10 +898,49 @@ export default function AdminPage() {
               >
                 {round2Unlocked ? '✓ Round 2 Unlocked' : '🔓 Unlock Round 2 for All'}
               </button>
+              <button
+                id="delete-all-teams-btn"
+                className="admin-btn danger"
+                style={{ backgroundColor: '#7f1d1d', borderColor: '#ef4444', color: '#fca5a5', minWidth: '180px' }}
+                onClick={() => setConfirmDeleteAllOpen(true)}
+                disabled={teams.length === 0}
+              >
+                🗑️ Delete All Teams
+              </button>
             </div>
           </section>
         </div>
       </section>
+
+      {/* Confirm delete ALL teams modal */}
+      {confirmDeleteAllOpen && (
+        <div className="admin-modal-backdrop" role="dialog" aria-modal="true">
+          <div className="admin-modal" style={{ borderColor: '#ef4444' }}>
+            <div className="section-kicker" style={{ color: '#ef4444' }}>⚠️ DESTRUCTIVE ACTION</div>
+            <h2 style={{ color: '#fca5a5' }}>Delete ALL Teams?</h2>
+            <p>This will <strong>permanently delete every team</strong> and all their chat logs from the database. This action <strong>cannot be undone</strong>.</p>
+            <p style={{ marginTop: '0.5rem', color: '#f87171' }}>Currently registered: <strong>{teams.length} team(s)</strong></p>
+            <div className="modal-actions" style={{ marginTop: '1.5rem' }}>
+              <button
+                className="admin-btn secondary"
+                onClick={() => setConfirmDeleteAllOpen(false)}
+                disabled={deleteAllLoading}
+              >
+                Cancel
+              </button>
+              <button
+                id="confirm-delete-all-teams-btn"
+                className="admin-btn danger"
+                style={{ backgroundColor: '#dc2626', borderColor: '#dc2626', color: 'white' }}
+                onClick={handleDeleteAllTeams}
+                disabled={deleteAllLoading}
+              >
+                {deleteAllLoading ? 'Deleting…' : 'Yes, Delete Everything'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Confirm unlock Round 2 modal */}
       {confirmUnlockOpen && (

@@ -1,6 +1,7 @@
 import asyncio
 import sys
-sys.path.append("/backend")
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.personas import stage1, stage2
 from app.services.llm_client import call_llm
