@@ -29,11 +29,11 @@ from app.personas.round2 import stage1, stage2, stage3, stage4, stage5
 # ── Persona registry (1-indexed) ──────────────────────────────────────────────
 
 PERSONAS = {
-    1: {"SYSTEM_PROMPT": stage1.SYSTEM_PROMPT, "DETECTION_STRING": stage1.DETECTION_STRING, "MODEL": stage1.MODEL, "TOOLS": getattr(stage1, "TOOLS", None)},
-    2: {"SYSTEM_PROMPT": stage2.SYSTEM_PROMPT, "DETECTION_STRING": stage2.DETECTION_STRING, "MODEL": stage2.MODEL, "TOOLS": getattr(stage2, "TOOLS", None)},
-    3: {"SYSTEM_PROMPT": stage3.SYSTEM_PROMPT, "DETECTION_STRING": stage3.DETECTION_STRING, "MODEL": stage3.MODEL, "TOOLS": getattr(stage3, "TOOLS", None)},
-    4: {"SYSTEM_PROMPT": stage4.SYSTEM_PROMPT, "DETECTION_STRING": stage4.DETECTION_STRING, "MODEL": stage4.MODEL, "TOOLS": getattr(stage4, "TOOLS", None)},
-    5: {"SYSTEM_PROMPT": stage5.SYSTEM_PROMPT, "DETECTION_STRING": stage5.DETECTION_STRING, "MODEL": stage5.MODEL, "TOOLS": getattr(stage5, "TOOLS", None)},
+    1: {"SYSTEM_PROMPT": stage1.SYSTEM_PROMPT, "DETECTION_STRING": stage1.DETECTION_STRING, "MODEL": stage1.MODEL, "TOOLS": getattr(stage1, "TOOLS", None), "OBJECTIVE": getattr(stage1, "OBJECTIVE", "")},
+    2: {"SYSTEM_PROMPT": stage2.SYSTEM_PROMPT, "DETECTION_STRING": stage2.DETECTION_STRING, "MODEL": stage2.MODEL, "TOOLS": getattr(stage2, "TOOLS", None), "OBJECTIVE": getattr(stage2, "OBJECTIVE", "")},
+    3: {"SYSTEM_PROMPT": stage3.SYSTEM_PROMPT, "DETECTION_STRING": stage3.DETECTION_STRING, "MODEL": stage3.MODEL, "TOOLS": getattr(stage3, "TOOLS", None), "OBJECTIVE": getattr(stage3, "OBJECTIVE", "")},
+    4: {"SYSTEM_PROMPT": stage4.SYSTEM_PROMPT, "DETECTION_STRING": stage4.DETECTION_STRING, "MODEL": stage4.MODEL, "TOOLS": getattr(stage4, "TOOLS", None), "OBJECTIVE": getattr(stage4, "OBJECTIVE", "")},
+    5: {"SYSTEM_PROMPT": stage5.SYSTEM_PROMPT, "DETECTION_STRING": stage5.DETECTION_STRING, "MODEL": stage5.MODEL, "TOOLS": getattr(stage5, "TOOLS", None), "OBJECTIVE": getattr(stage5, "OBJECTIVE", "")},
 }
 
 TOTAL_STAGES = 5
@@ -201,7 +201,9 @@ async def round2_chat(
     if stage_complete and current_stage < TOTAL_STAGES:
         # Advance to the next stage
         new_stage = session_store.r2_advance_stage(team_id)
-        system_message = TRANSITION_MESSAGES.get(current_stage)
+        base_message = TRANSITION_MESSAGES.get(current_stage, "")
+        next_objective = PERSONAS[new_stage].get("OBJECTIVE", "")
+        system_message = f"{base_message}\n\nObjective: {next_objective}".strip()
 
         # Update DB progress
         await _mark_stage_complete_in_db(db, team_id, new_stage - 1)  # stages completed = new_stage - 1

@@ -16,7 +16,7 @@ import Round2Page from "./round2/Round2Page";
    ProtectedRoute — calls GET /api/me on mount; if 401 → redirects to /login.
    Passes teamName down to the wrapped page so it can display it.
 ═══════════════════════════════════════════════════════════════════════════ */
-function ProtectedRoute({ children, onTeamName }) {
+function ProtectedRoute({ children, onTeamName, onUserData }) {
   const [status, setStatus] = useState("loading"); // "loading" | "ok" | "unauth"
   const navigate = useNavigate();
 
@@ -24,6 +24,7 @@ function ProtectedRoute({ children, onTeamName }) {
     getMe()
       .then((data) => {
         if (onTeamName) onTeamName(data.team_name);
+        if (onUserData) onUserData(data);
         setStatus("ok");
       })
       .catch(() => {
@@ -100,14 +101,16 @@ function App() {
     setLoading(true);
     fetchRound1History(active)
       .then((logs) => {
+        const objectiveMsg = {
+          id: "control-0",
+          side: "control",
+          text: `Challenge ${String(active + 1).padStart(2, "0")}: ${challenges[active].title}\n\n${challenges[active].goal}`
+        };
+
         if (logs.length === 0) {
           setMessagesByStage(prev => ({
             ...prev,
-            [active]: [{
-              id: "control-0",
-              side: "control",
-              text: `Challenge ${String(active + 1).padStart(2, "0")}: ${challenges[active].title}\n\n${challenges[active].goal}`
-            }]
+            [active]: []
           }));
         } else {
           const mapped = logs.map((log, i) => ({
@@ -202,7 +205,7 @@ function App() {
 
     try {
       // team_id no longer sent — backend reads it from the session cookie
-      const { reply, stageComplete, nextStage } = await sendChatMessage({
+      const { reply, stageComplete, nextStage, currentRound1Stage } = await sendChatMessage({
         stage: active,   // 0-indexed — backend translates to 1-indexed
         message: value,
       });
@@ -211,6 +214,15 @@ function App() {
         ...prev,
         [active]: [...(prev[active] || []), { id: Date.now() + 1, side: "control", text: reply }]
       }));
+
+      if (currentRound1Stage !== undefined) {
+        const completedStages = Array.from({length: currentRound1Stage}, (_, i) => i);
+        setCompleted(completedStages);
+        // If the admin advanced them past the active stage (and it wasn't a normal completion)
+        if (currentRound1Stage > active && !stageComplete) {
+          jumpToChallenge(currentRound1Stage < 5 ? currentRound1Stage : 4);
+        }
+      }
 
       if (stageComplete) {
         const nextCompleted = [...new Set([...completed, active])].sort((a, b) => a - b);
@@ -266,11 +278,7 @@ function App() {
       if (logs.length === 0) {
         setMessagesByStage(prev => ({
           ...prev,
-          [active]: [{
-            id: "control-0",
-            side: "control",
-            text: `Challenge ${String(active + 1).padStart(2, "0")}: ${challenges[active].title}\n\n${challenges[active].goal}`
-          }]
+          [active]: []
         }));
       } else {
         setMessagesByStage(prev => ({
@@ -309,7 +317,15 @@ function App() {
           />
         } />
         <Route path="/round-1" element={
-          <ProtectedRoute onTeamName={(name) => setStoredAccount(a => ({ ...a, team: name }))}>
+          <ProtectedRoute 
+            onTeamName={(name) => setStoredAccount(a => ({ ...a, team: name }))}
+            onUserData={(data) => {
+              const stage = data.round1_stage || 0;
+              const completedStages = Array.from({length: stage}, (_, i) => i);
+              setCompleted(completedStages);
+              setActive(stage < 5 ? stage : 4);
+            }}
+          >
             <Round1Page
               team={storedAccount?.team || "Team"} progress={progress} completed={completed}
               active={active} messages={messagesByStage[active] || []} input={input} setInput={setInput}

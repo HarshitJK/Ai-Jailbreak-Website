@@ -21,6 +21,7 @@ class ChatResponse(BaseModel):
     reply: str
     stageComplete: bool
     nextStage: int | None  # 0-indexed next stage, or null
+    currentRound1Stage: int | None = None  # to sync frontend with admin advances
 
 
 # ── Auth request/response models ──────────────────────────────────────────────

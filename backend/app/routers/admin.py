@@ -246,6 +246,7 @@ async def get_team_logs(
 
 from app.models import AdminAdvanceRequest
 from datetime import timezone
+from app.services import session_store
 
 @router.post("/api/admin/teams/{team_id}/advance")
 async def admin_advance_team(
@@ -264,33 +265,65 @@ async def admin_advance_team(
     if payload.round not in (1, 2) or payload.target_stage < 1 or payload.target_stage > 5:
         raise HTTPException(status_code=400, detail="Invalid round or target_stage")
 
+    team_doc = await db["teams"].find_one({"team_name": team_id})
+    if not team_doc:
+        raise HTTPException(status_code=404, detail="Team not found")
+
     update_fields = {}
     if payload.round == 1:
-        update_fields["round1_stage"] = payload.target_stage
-        if payload.target_stage == 5:
-            update_fields["round1_complete_at"] = datetime.now(timezone.utc)
+        # If forcing to Stage N, it means they completed N - 1 stages
+        stages_completed = payload.target_stage - 1
+        update_fields["round1_stage"] = stages_completed
+        if payload.target_stage == 5 and False: # we only complete it if they actually finish 5
+            pass
+        update_fields["round1_complete_at"] = None
+        
     else:
-        update_fields["round2_stage"] = payload.target_stage
-        if payload.target_stage == 5:
-            update_fields["round2_complete_at"] = datetime.now(timezone.utc)
+        stages_completed = payload.target_stage - 1
+        update_fields["round2_stage"] = stages_completed
+        update_fields["round2_complete_at"] = None
+        
+        # Update in-memory session_store
+        session_store.r2_set_stage(team_id, payload.target_stage)
 
     result = await db["teams"].update_one(
         {"team_name": team_id},
         {"$set": update_fields}
     )
 
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Team not found")
-
-    # Log the action in chat_logs so it's clear during review
-    await db["chat_logs"].insert_one({
-        "team_id": team_id,
-        "round": payload.round,
-        "stage": payload.target_stage,
-        "role": "system",
-        "message": f"Admin manually advanced team to Stage {payload.target_stage}",
-        "timestamp": datetime.now(timezone.utc),
-    })
+    now = datetime.now(timezone.utc)
+    if payload.round == 1:
+        current_db_stage = team_doc.get("round1_stage", 0) + 1 # 1-indexed
+        target = payload.target_stage
+        
+        if target > current_db_stage:
+            for s in range(current_db_stage, target):
+                await db["chat_logs"].insert_one({
+                    "team_id": team_id,
+                    "round": 1,
+                    "stage": s,
+                    "role": "system",
+                    "message": f"Admin manually advanced team to Stage {payload.target_stage}",
+                    "timestamp": now,
+                })
+        else:
+            await db["chat_logs"].insert_one({
+                "team_id": team_id,
+                "round": 1,
+                "stage": payload.target_stage,
+                "role": "system",
+                "message": f"Admin manually set team to Stage {payload.target_stage}",
+                "timestamp": now,
+            })
+    else:
+        await db["chat_logs"].insert_one({
+            "team_id": team_id,
+            "round": payload.round,
+            "stage": payload.target_stage,
+            "role": "system",
+            "message": f"Admin manually advanced team to Stage {payload.target_stage}",
+            "timestamp": now,
+        })
 
     return {"ok": True, "team_id": team_id, "round": payload.round, "target_stage": payload.target_stage}
 

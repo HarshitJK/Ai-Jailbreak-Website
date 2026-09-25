@@ -259,6 +259,18 @@ export default function Round1Page({
                   </button>
                 </div>
 
+                <div className="stage-briefing-card" style={{
+                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                  padding: '16px 20px',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  borderRadius: '8px',
+                  color: '#e5e7eb',
+                  fontSize: '0.95rem',
+                  marginBottom: '24px'
+                }}>
+                  <strong>Objective:</strong> {activeChallenge.goal}
+                </div>
+
                 <div className="messages">
                   {messages.map((msg) => (
                     <div key={msg.id} className={msg.side === "user" ? "message-row user" : "message-row"}>

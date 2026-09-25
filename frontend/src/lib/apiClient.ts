@@ -34,6 +34,7 @@ export interface ChatResponse {
   reply: string;
   stageComplete: boolean;
   nextStage: number | null;  // 0-indexed next stage, or null
+  currentRound1Stage?: number; // 0-indexed, reflects actual completed stages in DB
 }
 
 // ── Auth types ────────────────────────────────────────────────────────────────
@@ -123,12 +124,12 @@ export interface Round2FlagResponse {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-async function apiPost<T>(path: string, body: unknown): Promise<T> {
+async function apiPost<T>(path: string, body: unknown, extraHeaders: Record<string, string> = {}): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     method: "POST",
     credentials: "include",
     cache: "no-store",  // send session cookie automatically
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...extraHeaders },
     body: JSON.stringify(body),
   });
 
@@ -301,7 +302,8 @@ export async function adminAdvanceTeam(
 ): Promise<{ ok: boolean }> {
   return apiPost<{ ok: boolean }>(
     `/api/admin/teams/${encodeURIComponent(teamId)}/advance`,
-    { round, target_stage: targetStage }
+    { round, target_stage: targetStage },
+    { "X-Admin-Secret": ADMIN_SECRET }
   );
 }
 
@@ -329,7 +331,8 @@ export async function fetchLeaderboardR2(): Promise<AdminTeam[]> {
 export async function qualifyTeam(teamId: string): Promise<{ ok: boolean, qualified: boolean }> {
   return apiPost<{ ok: boolean, qualified: boolean }>(
     `/api/admin/teams/${encodeURIComponent(teamId)}/qualify`,
-    {}
+    {},
+    { "X-Admin-Secret": ADMIN_SECRET }
   );
 }
 
@@ -351,23 +354,25 @@ export async function deleteTeam(teamId: string): Promise<{ ok: boolean }> {
 export async function forceCompleteR1(teamId: string): Promise<{ ok: boolean }> {
   return apiPost<{ ok: boolean }>(
     `/api/admin/teams/${encodeURIComponent(teamId)}/force-complete-r1`,
-    {}
+    {},
+    { "X-Admin-Secret": ADMIN_SECRET }
   );
 }
 
 export async function unlockRound2ForAll(): Promise<{ ok: boolean; teams_unlocked: number }> {
   return apiPost<{ ok: boolean; teams_unlocked: number }>(
     `/api/admin/unlock-round2`,
-    {}
+    {},
+    { "X-Admin-Secret": ADMIN_SECRET }
   );
 }
 
 export async function startRound2(): Promise<{ ok: boolean, round2_open: boolean }> {
-  return apiPost<{ ok: boolean, round2_open: boolean }>("/api/admin/round2/start", {});
+  return apiPost<{ ok: boolean, round2_open: boolean }>("/api/admin/round2/start", {}, { "X-Admin-Secret": ADMIN_SECRET });
 }
 
 export async function stopRound2(): Promise<{ ok: boolean, round2_open: boolean }> {
-  return apiPost<{ ok: boolean, round2_open: boolean }>("/api/admin/round2/stop", {});
+  return apiPost<{ ok: boolean, round2_open: boolean }>("/api/admin/round2/stop", {}, { "X-Admin-Secret": ADMIN_SECRET });
 }
 
 export async function fetchRound2Status(): Promise<{ round2_open: boolean }> {

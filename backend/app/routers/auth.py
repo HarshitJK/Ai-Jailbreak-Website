@@ -135,6 +135,7 @@ class MeResponse(BaseModel):
     team_id: str
     team_name: str
     qualified: bool = False
+    round1_stage: int = 0
 
 
 @router.get("/api/me", response_model=MeResponse)
@@ -148,4 +149,5 @@ async def me(
     """
     team_doc = await db["teams"].find_one({"team_name": team_id})
     qualified = team_doc.get("qualified", False) if team_doc else False
-    return MeResponse(team_id=team_id, team_name=team_id, qualified=qualified)
+    round1_stage = team_doc.get("round1_stage", 0) if team_doc else 0
+    return MeResponse(team_id=team_id, team_name=team_id, qualified=qualified, round1_stage=round1_stage)

@@ -209,59 +209,72 @@ export default function Round2Page() {
           </section>
 
           {/* Flag submission section — always visible */}
-          <section className="bottom-info" id="flag-submit">
+          <section className="bottom-info" id="flag-submit" style={{ alignItems: 'center' }}>
             <div>
               <p className="section-label">ROUND 2 FLAG</p>
-              <h2>Found the master flag?</h2>
+              <h2 style={{ margin: 0 }}>Found the master flag?</h2>
             </div>
-            <form
-              onSubmit={handleFlagSubmit}
-              style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginTop: '1rem' }}
-            >
-              <input
-                type="text"
-                value={flagInput}
-                onChange={e => setFlagInput(e.target.value)}
-                placeholder="Enter flag (e.g. NOVA_MASTER_FLAG_2026)"
-                aria-label="Flag submission input"
-                style={{
-                  flex: '1 1 260px',
-                  padding: '0.6rem 1rem',
-                  borderRadius: '8px',
-                  border: '1.5px solid #ccc',
-                  fontSize: '0.95rem',
-                  minWidth: 0,
-                }}
-              />
-              <button
-                type="submit"
-                className="primary"
-                disabled={!flagInput.trim() || flagSubmitting}
-                style={{ whiteSpace: 'nowrap' }}
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <form
+                onSubmit={handleFlagSubmit}
+                style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}
               >
-                {flagSubmitting ? 'Checking…' : 'Submit Flag'}
-              </button>
-            </form>
-            {flagResult === 'correct' && (
-              <p style={{ marginTop: '0.75rem', color: '#16a34a', fontWeight: 600 }}>
-                ✓ Correct! You've completed Round 2.
-              </p>
-            )}
-            {flagResult === 'wrong' && (
-              <p style={{ marginTop: '0.75rem', color: '#dc2626', fontWeight: 600 }}>
-                ✗ Incorrect flag — keep exploring.
-              </p>
-            )}
-            {flagResult === 'noteamid' && (
-              <p style={{ marginTop: '0.75rem', color: '#d97706', fontWeight: 600 }}>
-                ⚠ Enter your Team ID first (open the chat).
-              </p>
-            )}
-            {flagResult === 'error' && (
-              <p style={{ marginTop: '0.75rem', color: '#dc2626' }}>
-                Network error — is the backend running?
-              </p>
-            )}
+                <input
+                  type="text"
+                  value={flagInput}
+                  onChange={e => setFlagInput(e.target.value)}
+                  placeholder="Enter your flag here"
+                  aria-label="Flag submission input"
+                  style={{
+                    flex: '1 1 260px',
+                    padding: '14px 16px',
+                    borderRadius: '8px',
+                    border: '1px solid #ccc',
+                    fontSize: '1rem',
+                    minWidth: 0,
+                    background: '#fff',
+                    color: '#111',
+                    outline: 'none'
+                  }}
+                />
+                <button
+                  type="submit"
+                  disabled={!flagInput.trim() || flagSubmitting}
+                  style={{ 
+                    whiteSpace: 'nowrap',
+                    padding: '14px 24px',
+                    borderRadius: '8px',
+                    background: '#171717',
+                    color: '#fff',
+                    border: 'none',
+                    fontWeight: '600',
+                    fontSize: '1rem'
+                  }}
+                >
+                  {flagSubmitting ? 'Checking…' : 'Submit Flag'}
+                </button>
+              </form>
+              {flagResult === 'correct' && (
+                <p style={{ marginTop: '0.75rem', color: '#16a34a', fontWeight: 600 }}>
+                  ✓ Correct! You've completed Round 2.
+                </p>
+              )}
+              {flagResult === 'wrong' && (
+                <p style={{ marginTop: '0.75rem', color: '#dc2626', fontWeight: 600 }}>
+                  ✗ Incorrect flag — keep exploring.
+                </p>
+              )}
+              {flagResult === 'noteamid' && (
+                <p style={{ marginTop: '0.75rem', color: '#d97706', fontWeight: 600 }}>
+                  ⚠ Enter your Team ID first (open the chat).
+                </p>
+              )}
+              {flagResult === 'error' && (
+                <p style={{ marginTop: '0.75rem', color: '#dc2626' }}>
+                  Network error — is the backend running?
+                </p>
+              )}
+            </div>
           </section>
         </main>
 
@@ -338,7 +351,7 @@ export default function Round2Page() {
                     marginBottom: '1rem',
                     boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
                   }}>
-                    {ROUND_2_OBJECTIVES[currentStage] || "QUESTION: Unknown stage."}
+                    {ROUND_2_OBJECTIVES[currentStage] || "Unknown stage."}
                   </div>
 
                   {messages.map((m, i) => (

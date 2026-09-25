@@ -44,8 +44,7 @@ def check_rate_limit(team_id: str, round_num: int) -> str | None:
 # In-memory store: key → ordered list of {"role": str, "content": str} message pairs
 _store: Dict[str, List[Dict[str, str]]] = {}
 
-# Completed stages tracking: team_id -> Set of completed stage numbers
-_completed_stages: Dict[str, Set[int]] = {}
+
 
 
 # ── Round 2 store ─────────────────────────────────────────────────────────────
@@ -77,24 +76,13 @@ def add_to_history(
     ]
 
 
-def mark_stage_complete(team_id: str, stage: int) -> None:
-    """Marks a specific stage as complete for a team."""
-    if team_id not in _completed_stages:
-        _completed_stages[team_id] = set()
-    _completed_stages[team_id].add(stage)
 
-
-def is_stage_complete(team_id: str, stage: int) -> bool:
-    """Returns True if the stage is marked complete for the team."""
-    return stage in _completed_stages.get(team_id, set())
 
 
 def clear_stage(team_id: str, stage: int) -> None:
-    """Clears history and completion status for a single stage (for reset)."""
+    """Clears history for a single stage (for reset)."""
     key = _key(team_id, stage)
     _store.pop(key, None)
-    if team_id in _completed_stages:
-        _completed_stages[team_id].discard(stage)
 
 
 def clear_team(team_id: str) -> None:
@@ -103,7 +91,6 @@ def clear_team(team_id: str) -> None:
     keys_to_delete = [k for k in _store.keys() if k.startswith(f"{team_id}:")]
     for k in keys_to_delete:
         del _store[k]
-    _completed_stages.pop(team_id, None)
     # Also clear round-2 session
     _r2_store.pop(team_id, None)
     
@@ -150,6 +137,12 @@ def r2_advance_stage(team_id: str) -> int:
     new_stage = min(current + 1, 5)
     _r2_store[team_id]["current_stage"] = new_stage
     return new_stage
+
+
+def r2_set_stage(team_id: str, stage: int) -> None:
+    """Forces the current stage to a specific value."""
+    _r2_init(team_id)
+    _r2_store[team_id]["current_stage"] = max(1, min(stage, 5))
 
 
 def r2_clear_team(team_id: str) -> None:

@@ -177,11 +177,12 @@ async def chat_endpoint(
     stage_num = stage_raw + 1  # 1–5
 
     # Guard: already completed?
-    if session_store.is_stage_complete(team_id, stage_num):
+    if stage_num <= current_unlocked_stage:
         return ChatResponse(
             reply=f"Stage {stage_num} is already complete. Move to the next challenge!",
             stageComplete=True,
             nextStage=stage_raw + 1 if stage_num < TOTAL_STAGES else None,
+            currentRound1Stage=current_unlocked_stage,
         )
 
     # Get persona and history
@@ -195,6 +196,7 @@ async def chat_endpoint(
             reply=rate_limit_msg,
             stageComplete=False,
             nextStage=None,
+            currentRound1Stage=current_unlocked_stage,
         )
 
     # Call LLM with the stage's assigned model
@@ -210,9 +212,9 @@ async def chat_endpoint(
     # Check unlock condition
     stage_complete = check_unlock_condition(stage_num, reply, user_message)
     if stage_complete:
-        session_store.mark_stage_complete(team_id, stage_num)
         # Update team's progress in MongoDB
         await _mark_stage_complete_in_db(db, team_id, stage_num)
+        current_unlocked_stage = stage_num
 
     # Calculate nextStage: 0-indexed next stage, or null if all stages done
     next_stage: Optional[int] = (
@@ -223,6 +225,7 @@ async def chat_endpoint(
         reply=reply,
         stageComplete=stage_complete,
         nextStage=next_stage,
+        currentRound1Stage=current_unlocked_stage,
     )
 
 

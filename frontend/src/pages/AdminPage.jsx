@@ -537,14 +537,17 @@ function TeamDetailsModal({ team, onClose, onAdvance }) {
                 </li>
               ))}
             </ul>
-            <div style={{marginTop: '1rem'}}>
-              <button 
-                className="admin-btn secondary" 
-                onClick={() => onAdvance(team.team_name, 1, Math.min(5, team.round1_stage + 1))}
-                disabled={team.round1_stage >= 5}
-              >
-                Force Advance R1 Stage
-              </button>
+            <div style={{marginTop: '1rem', display: 'flex', flexWrap: 'wrap', gap: '0.5rem'}}>
+              {[1, 2, 3, 4, 5].map(stg => (
+                <button 
+                  key={stg}
+                  className="admin-btn secondary" 
+                  style={{ padding: '4px 8px', fontSize: '0.8rem' }}
+                  onClick={() => onAdvance(team.team_name, 1, stg)}
+                >
+                  Force to Stage {stg}
+                </button>
+              ))}
             </div>
           </div>
           
@@ -560,14 +563,17 @@ function TeamDetailsModal({ team, onClose, onAdvance }) {
                 </li>
               ))}
             </ul>
-            <div style={{marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem'}}>
-              <button 
-                className="admin-btn secondary" 
-                onClick={() => onAdvance(team.team_name, 2, Math.min(5, team.round2_stage + 1))}
-                disabled={team.round2_stage >= 5}
-              >
-                Force Advance R2 Stage
-              </button>
+            <div style={{marginTop: '1rem', display: 'flex', flexWrap: 'wrap', gap: '0.5rem'}}>
+              {[1, 2, 3, 4, 5].map(stg => (
+                <button 
+                  key={stg}
+                  className="admin-btn secondary" 
+                  style={{ padding: '4px 8px', fontSize: '0.8rem' }}
+                  onClick={() => onAdvance(team.team_name, 2, stg)}
+                >
+                  Force to Stage {stg}
+                </button>
+              ))}
             </div>
           </div>
         </div>
